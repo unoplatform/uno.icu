@@ -16,7 +16,7 @@ jobs:
 
       - name: Build unoicu.a
         run: |
-          pushd icu/unoicu
+          pushd src/unoicu
           docker build --build-arg EMSCRIPTEN_VERSION=${{ env.EMSCRIPTEN_VERSION }} --output type=local,dest=. .
           popd
 
@@ -24,7 +24,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unoicu.a
-          path: ./icu/unoicu/unoicu.a
+          path: ./src/unoicu/unoicu.a
 
   build_icudt:
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
         env:
           ICU_SOURCE_ZIP_URL: https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip
         run: |
-          pushd icu/cldr_data
+          pushd src/cldr_data
           docker build --build-arg ICU_SOURCE_ZIP_URL=${ICU_SOURCE_ZIP_URL} --output type=local,dest=. .
           popd
 
@@ -43,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: icudt.dat
-          path: ./icu/cldr_data/icudt.dat
+          path: ./src/cldr_data/icudt.dat
