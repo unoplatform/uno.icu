@@ -1,4 +1,4 @@
-# Build this Dockerfile with  "docker build --output type=local,dest=. ." to get the unoicu.a file in the currect directory
+# Build this Dockerfile with  "docker build --build-arg EMSCRIPTEN_VERSION=<your-version> --output type=local,dest=. ." to get the unoicu.a file in the currect directory
 ARG EMSCRIPTEN_VERSION
 
 FROM docker.io/emscripten/emsdk:${EMSCRIPTEN_VERSION} AS build
