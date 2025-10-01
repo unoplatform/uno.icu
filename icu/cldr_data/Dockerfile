@@ -2,7 +2,7 @@
 ARG ICU_SOURCE_ZIP_URL
 
 FROM docker.io/ubuntu:24.04 AS build
-
+ARG ICU_SOURCE_ZIP_URL
 
 RUN apt-get update && apt-get install -y make git python3 doxygen zip wget g++
 
