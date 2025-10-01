@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+    <PropertyGroup>
+        <UnoFeaturesLowerCase>$([MSBuild]::String.ToLower($(UnoFeatures)))</UnoFeaturesLowerCase>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(IsUnoHead)' == 'True' and '$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))' == 'browser' and $(UnoFeaturesLowerCase.Contains('skiarenderer'))">
+        <NativeFileReference Include="$(MSBuildThisFileDirectory)icudt.dat" />
+    </ItemGroup>
+
+</Project>

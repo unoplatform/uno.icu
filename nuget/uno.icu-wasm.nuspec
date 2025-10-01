@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+    <metadata minClientVersion="5.0.0">
+        <id>Uno.icu-wasm</id>
+        <version>1.0.0</version>
+        <title>Uno ICU for WebAssembly</title>
+        <authors>Uno Platform</authors>
+        <owners>unoplatform</owners>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <projectUrl>https://github.com/unoplatform/uno.icu-wasm</projectUrl>
+        <iconUrl>https://nv-assets.azurewebsites.net/logos/uno.png</iconUrl>
+        <description>The International Components for Unicode for WebAssembly</description>
+        <copyright>Copyright (C) 2015-2025 Uno Platform inc. - all rights reserved</copyright>
+        <repository type="git" url="https://github.com/unoplatform/Uno.icu-wasm.git" />
+    </metadata>
+    <files>
+        <file src="buildTransitive\Uno.icu-wasm.targets" target="buildTransitive" />
+        <file src="buildTransitive\unoicu.a" target="buildTransitive" />
+        <file src="build\Uno.icu-wasm.targets" target="build" />
+        <file src="build\icudt.dat" target="build" />
+    </files>
+</package>
