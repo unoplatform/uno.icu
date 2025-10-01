@@ -1,0 +1,29 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_unoicu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build unoicu.a
+        run: |
+          pushd icu/unoicu
+          docker build --output type=local,dest=. .
+          popd
+  build_icudt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build icudt.dat
+        run: |
+          pushd icu/cldr_data
+          docker build --output type=local,dest=. .
+          popd
