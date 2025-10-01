@@ -44,3 +44,42 @@ jobs:
         with:
           name: icudt.dat
           path: ./src/cldr_data/icudt.dat
+
+  package:
+    needs: [build_unoicu, build_icudt]
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download icudt.dat
+        uses: actions/download-artifact@v4
+        with:
+          name: icudt.dat
+          path: ./nuget/build/icudt.dat
+
+      - name: Download unoicu.a
+        uses: actions/download-artifact@v4
+        with:
+          name: unoicu.a
+          path: ./nuget/buildTransitive/unoicu.a
+
+      - name: List files
+        run: |
+          Get-ChildItem -Recurse ./nuget
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v1.7.2
+        with:
+          dotnet-version: 8.0.100
+
+      - name: Build nuget
+        run: |
+          pushd nuget
+          .\nuget.exe pack uno.icu-wasm.nuspec
+          popd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          path: ./nuget/*.nupkg
