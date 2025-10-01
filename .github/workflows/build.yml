@@ -23,7 +23,7 @@ jobs:
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
-          name: unoicu-emsdk-${{ matrix.EMSCRIPTEN_VERSION }}.a
+          name: unoicu.a
           path: ./icu/unoicu/unoicu.a
 
   build_icudt:
@@ -42,4 +42,5 @@ jobs:
       - name: Upload icudt.dat
         uses: actions/upload-artifact@v4
         with:
+          name: icudt.dat
           path: ./icu/cldr_data/icudt.dat
