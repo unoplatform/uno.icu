@@ -15,16 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build unoicu.a for emsdk ${{ matrix.EMSCRIPTEN_VERSION }}
+      - name: Build unoicu.a
         run: |
           pushd icu/unoicu
           docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --output type=local,dest=. .
           popd
+
+      - name: Upload unoicu.a
+        uses: actions/upload-artifact@v4
+        with:
+          name: unoicu-emsdk-${{ matrix.EMSCRIPTEN_VERSION }}.a
+          path: ./icu/unoicu/unoicu.a
+
   build_icudt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-
+      
       - name: Build icudt.dat
         env:
           ICU_SOURCE_ZIP_URL: https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip
@@ -32,3 +39,8 @@ jobs:
           pushd icu/cldr_data
           docker build --build-arg ICU_SOURCE_ZIP_URL=${ICU_SOURCE_ZIP_URL} --output type=local,dest=. .
           popd
+
+      - name: Upload icudt.dat
+        uses: actions/upload-artifact@v4
+        with:
+          path: ./icu/cldr_data/icudt.dat
