@@ -66,6 +66,10 @@ jobs:
           name: merged-artifacts
           path: .
 
+      - name: List files
+        run: |
+          Get-ChildItem -Recurse .
+
       - name: Move downloaded artifacts to correct locations
         shell: bash
         run: |
