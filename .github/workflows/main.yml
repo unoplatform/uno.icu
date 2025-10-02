@@ -66,6 +66,12 @@ jobs:
           name: merged-artifacts
           path: ./merged-artifacts
 
+      - uses: dotnet/nbgv@f088059084cb5d872e9d1a994433ca6440c2bf72 # v0.4.2
+        id: nbgv
+        with:
+          toolVersion: 3.6.139
+          setAllVars: true
+
       - name: List files
         run: |
           Get-ChildItem -Recurse .
@@ -96,10 +102,121 @@ jobs:
       - name: Build nuget
         run: |
           pushd nuget
-          .\nuget.exe pack uno.icu-wasm.nuspec
+          .\nuget.exe pack uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
         with:
           name: nuget
           path: ./nuget/*.nupkg
+
+  sign:
+    name: Sign Package
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) }}
+    runs-on: windows-latest
+    environment: PackageSign
+
+    permissions:
+      id-token: write # Required for requesting the JWT
+
+    needs:
+      - package
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: artifacts\NuGet
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '9.0.x'
+
+      # Install the code signing tool    
+      - name: Install Sign CLI tool
+        run: dotnet tool install --tool-path . sign --version 0.9.1-beta.25278.1
+      
+      # Login to Azure using a ServicePrincipal configured to authenticate agaist a GitHub Action
+      - name: 'Az CLI login'
+        uses: azure/login@v1
+        with:
+          allow-no-subscriptions: true
+          client-id: ${{ secrets.SIGN_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.SIGN_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.SIGN_AZURE_SUBSCRIPTION_ID }}
+
+      # Run the signing command
+      - name: Sign artifacts
+        shell: pwsh
+        run: >
+          ./sign code azure-key-vault
+          artifacts\NuGet\*.nupkg
+          --publisher-name "Uno Platform"
+          --description "uno.icu"
+          --description-url "https://github.com/${{ env.GITHUB_REPOSITORY }}"
+          --azure-key-vault-managed-identity true
+          --azure-key-vault-url "${{ secrets.SIGN_KEY_VAULT_URL }}"
+          --azure-key-vault-certificate "${{ secrets.SIGN_KEY_VAULT_CERTIFICATE_ID }}"
+          --verbosity information
+
+      - name: Upload Signed Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NuGet-Signed
+          path: .\artifacts\NuGet
+
+  publish_dev:
+    name: Publish Dev
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: windows-latest
+
+    needs:
+      - sign
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: NuGet-Signed
+          path: artifacts
+
+      - name: NuGet Push
+        shell: pwsh
+        run: |
+          dotnet nuget push artifacts\*.nupkg -s https://api.nuget.org/v3/index.json -k "${{ secrets.NUGET_ORG_API_KEY }}"
+
+  publish_prod:
+    name: Publish Production
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') }}
+    runs-on: windows-latest
+    environment: Production
+    needs:
+      - sign
+  
+    permissions:
+      contents: write  # allow pushing tags
+  
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+  
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: NuGet-Signed
+          path: artifacts
+
+      - name: NuGet Push
+        shell: pwsh
+        run: |
+          dotnet nuget push artifacts\*.nupkg -s https://api.nuget.org/v3/index.json -k "${{ secrets.NUGET_ORG_API_KEY }}"
+
+      - name: Tag Release
+        uses: ./.github/workflows/actions/tag-release
