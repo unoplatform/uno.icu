@@ -62,18 +62,18 @@ jobs:
       - name: Download merged artifacts
         uses: actions/download-artifact@v4
         with:
-          name: unoicu-merged
+          name: merged-artifacts
           path: .
 
       - name: Move downloaded artifacts to correct locations
         run: |
-          mv ./unoicu-merged/icudt.dat ./nuget/build
+          mv ./merged-artifacts/icudt.dat ./nuget/build
           
           mkdir ./nuget/buildTransitive/native/unoicu.a
-          for dir in ./unoicu-merged/unoicu-*; do
+          for dir in ./merged-artifacts/unoicu-*; do
             new_name="${dir#unoicu-}"
             mkdir ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp ./unoicu-merged/"$dir"/unoicu.a ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            cp ./merged-artifacts/"$dir"/unoicu.a ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
           done
 
       - name: List files
