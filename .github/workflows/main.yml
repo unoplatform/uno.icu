@@ -79,8 +79,8 @@ jobs:
           pushd merged-artifacts
           for dir in unoicu-*; do
             new_name="${dir#unoicu-}"
-            mkdir -p ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp -r "$dir"/unoicu.a ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            mkdir -p ../nuget/buildTransitive/native/unoicu.a/"$new_name"/st
+            cp -r "$dir"/unoicu.a ../nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
           done
           popd
 
