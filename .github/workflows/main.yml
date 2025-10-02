@@ -76,15 +76,17 @@ jobs:
           mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/build
           
           mkdir -p ./nuget/buildTransitive/native/unoicu.a
-          for dir in ./merged-artifacts/unoicu-*; do
+          pushd merged-artifacts
+          for dir in unoicu-*; do
             new_name="${dir#unoicu-}"
             mkdir -p ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp ./merged-artifacts/"$dir"/unoicu.a ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            cp "$dir" ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
           done
+          popd
 
       - name: List files
         run: |
-          Get-ChildItem -Recurse ./nuget
+          Get-ChildItem -Recurse .
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v1.7.2
