@@ -75,10 +75,10 @@ jobs:
         run: |
           mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/build
           
-          mkdir ./nuget/buildTransitive/native/unoicu.a
+          mkdir -p ./nuget/buildTransitive/native/unoicu.a
           for dir in ./merged-artifacts/unoicu-*; do
             new_name="${dir#unoicu-}"
-            mkdir ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
+            mkdir -p ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
             cp ./merged-artifacts/"$dir"/unoicu.a ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
           done
 
