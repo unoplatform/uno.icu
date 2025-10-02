@@ -18,14 +18,14 @@ jobs:
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
-          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --output type=local,dest=. .
+          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --output type=local,dest=./out .
           popd
 
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
           name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}
-          path: ./src/unoicu
+          path: ./src/unoicu/out
 
   build_icudt:
     runs-on: ubuntu-latest
