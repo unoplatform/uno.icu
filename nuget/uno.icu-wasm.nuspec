@@ -15,7 +15,7 @@
     </metadata>
     <files>
         <file src="buildTransitive\Uno.icu-wasm.targets" target="buildTransitive" />
-        <file src="buildTransitive\**" target="buildTransitive" />
+        <file src="buildTransitive\native\**" target="buildTransitive\native" />
         <file src="build\Uno.icu-wasm.targets" target="build" />
         <file src="build\icudt.dat" target="build" />
     </files>
