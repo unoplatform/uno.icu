@@ -1,4 +1,4 @@
-name: Docker Build
+name: Build and publish
 
 on:
   push:
@@ -56,13 +56,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: icudt.dat
-          path: ./nuget/build/icudt.dat
+          path: ./nuget/build
 
       - name: Download unoicu.a
         uses: actions/download-artifact@v4
         with:
           name: unoicu.a
-          path: ./nuget/buildTransitive/unoicu.a
+          path: ./nuget/buildTransitive
 
       - name: List files
         run: |
