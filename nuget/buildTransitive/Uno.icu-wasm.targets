@@ -5,7 +5,7 @@
         <UnoFeaturesLowerCase>$(UnoFeatures.ToLowerInvariant())</UnoFeaturesLowerCase>
     </PropertyGroup>
     <ItemGroup Condition="'$(IsUnoHead)' == 'True' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'browser' and $(UnoFeaturesLowerCase.Contains('skiarenderer'))">
-        <NativeFileReference Include="$(MSBuildThisFileDirectory)unoicu.a" />
+        <NativeFileReference Include="$(MSBuildThisFileDirectory)**/unoicu.a" />
     </ItemGroup>
 
 </Project>

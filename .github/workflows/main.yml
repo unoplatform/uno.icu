@@ -9,22 +9,23 @@ on:
 jobs:
   build_unoicu:
     runs-on: ubuntu-latest
-    env:
-      EMSCRIPTEN_VERSION: '4.0.11'
+    strategy:
+      matrix:
+        EMSCRIPTEN_VERSION: [ '3.1.12','3.1.34','3.1.56' ]
     steps:
       - uses: actions/checkout@v2
 
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
-          docker build --build-arg EMSCRIPTEN_VERSION=${{ env.EMSCRIPTEN_VERSION }} --output type=local,dest=. .
+          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --output type=local,dest=. .
           popd
 
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
-          name: unoicu.a
-          path: ./src/unoicu/unoicu.a
+          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}
+          path: ./src/unoicu
 
   build_icudt:
     runs-on: ubuntu-latest
@@ -52,17 +53,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download icudt.dat
-        uses: actions/download-artifact@v4
+      - name: Merge artifacts
+        uses: actions/upload-artifact/merge@v4
         with:
-          name: icudt.dat
-          path: ./nuget/build
+          name: merged-artifacts
+          pattern: unoicu-*
 
-      - name: Download unoicu.a
+      - name: Download merged artifacts
         uses: actions/download-artifact@v4
         with:
-          name: unoicu.a
-          path: ./nuget/buildTransitive
+          name: unoicu-merged
+          path: .
+
+      - name: Move downloaded artifacts to correct locations
+        run: |
+          mv ./unoicu-merged/icudt.dat ./nuget/build
+          
+          mkdir ./nuget/buildTransitive/native/unoicu.a
+          for dir in ./unoicu-merged/unoicu-*; do
+            new_name="${dir#unoicu-}"
+            mkdir ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
+            cp ./unoicu-merged/"$dir"/unoicu.a ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+          done
 
       - name: List files
         run: |
