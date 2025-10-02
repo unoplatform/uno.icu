@@ -66,6 +66,7 @@ jobs:
           path: .
 
       - name: Move downloaded artifacts to correct locations
+        shell: bash
         run: |
           mv ./merged-artifacts/icudt.dat ./nuget/build
           
