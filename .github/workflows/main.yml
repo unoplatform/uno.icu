@@ -12,19 +12,21 @@ jobs:
     strategy:
       matrix:
         EMSCRIPTEN_VERSION: [ '3.1.12','3.1.34','3.1.56' ]
+        multithreaded: [true, false]
+        simd: [true, false]
     steps:
       - uses: actions/checkout@v2
 
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
-          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --output type=local,dest=./out .
+          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --build-arg IS_MULTITHREADED=${{ matrix.multithreaded }} --build-arg IS_SIMD_SUPPORTED=${{ matrix.simd }} --output type=local,dest=out/${{ matrix.EMSCRIPTEN_VERSION }}/${{ matrix.multithreaded == 'true' && 'mt' || 'st' }}${{ matrix.simd == 'true' && ',simd' || '' }} .
           popd
 
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
-          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}
+          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}-${{ matrix.multithreaded == 'true' && 'mt' || 'st' }}-${{ matrix.simd == 'true' && 'simd' || 'nosimd' }}
           path: ./src/unoicu/out
 
   build_icudt:
@@ -86,9 +88,7 @@ jobs:
           mkdir -p ./nuget/buildTransitive/native/unoicu.a
           pushd merged-artifacts
           for dir in unoicu-*; do
-            new_name="${dir#unoicu-}"
-            mkdir -p ../nuget/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp -r "$dir"/unoicu.a ../nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            cp -r "$dir"/** ../nuget/buildTransitive/native/unoicu.a/
           done
           popd
 
