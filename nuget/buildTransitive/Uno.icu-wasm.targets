@@ -2,10 +2,10 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
     <PropertyGroup>
-        <UnoFeaturesLowerCase>$([System.String]::ToLower($(UnoFeatures)))</UnoFeaturesLowerCase>
+        <UnoFeaturesLowerCase>$(UnoFeatures.ToLowerInvariant())</UnoFeaturesLowerCase>
     </PropertyGroup>
-    <ItemGroup Condition="'$(IsUnoHead)' == 'True' and '$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))' == 'browser' and $(UnoFeaturesLowerCase.Contains('skiarenderer'))">
-        <NativeFileReference Include="$(MSBuildThisFileDirectory)icudt.dat" />
+    <ItemGroup Condition="'$(IsUnoHead)' == 'True' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'browser' and $(UnoFeaturesLowerCase.Contains('skiarenderer'))">
+        <NativeFileReference Include="$(MSBuildThisFileDirectory)unoicu.a" />
     </ItemGroup>
 
 </Project>
