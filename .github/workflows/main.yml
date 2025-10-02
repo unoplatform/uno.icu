@@ -80,7 +80,7 @@ jobs:
           for dir in unoicu-*; do
             new_name="${dir#unoicu-}"
             mkdir -p ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp "$dir" ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            cp -r "$dir" ./nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
           done
           popd
 
