@@ -73,7 +73,36 @@ jobs:
           name: libicu_darwin_${{ matrix.arch }}
           path: ./artifacts
 
-  package:
+  package_macos:
+    needs: [build_libicu_darwin]
+    runs-on: 'macos-15'
+    steps:
+      - name: Merge libicu binaries
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: libicu-darwin-merged
+          pattern: 'libicu-darwin-*'
+          separate-directories: true
+
+      - name: Download merged libicu binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-darwin-merged
+          path: ./libicu-darwin-merged
+
+      - name: Create universal libicu binaries
+        run: |
+          mkdir libicu_darwin_universal
+          lipo -create ./**/libicuuc.dylib --output libicu_darwin_universal/libicuuc.dylib
+          lipo -create ./**/libicudata.dylib --output libicu_darwin_universal/libicudata.dylib
+          
+      - name: Upload universal libicu binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu_darwin_universal
+          path: ./libicu_darwin_universal/*
+
+  package_wasm:
     needs: [build_unoicu, build_icudt]
     runs-on: windows-latest
 
@@ -82,18 +111,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Merge artifacts
+      - name: Merge unoicu.a artifacts
         uses: actions/upload-artifact/merge@v4
         with:
-          name: merged-artifacts
-          pattern: '*'
+          name: unoicu-merged
+          pattern: 'unoicu-*'
           separate-directories: true
 
-      - name: Download merged artifacts
+      - name: Download merged unoicu.a artifacts
         uses: actions/download-artifact@v4
         with:
-          name: merged-artifacts
+          name: unoicu-merged
           path: ./merged-artifacts
+
+      - name: Download icudt.dat
+        uses: actions/download-artifact@v4
+        with:
+          name: icudt.dat
+          path: ./merged-artifacts/icudt.dat
 
       - uses: dotnet/nbgv@f088059084cb5d872e9d1a994433ca6440c2bf72 # v0.4.2
         id: nbgv
@@ -149,7 +184,7 @@ jobs:
       id-token: write # Required for requesting the JWT
 
     needs:
-      - package
+      - package_wasm
 
     steps:
       - name: Checkout
