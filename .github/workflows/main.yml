@@ -115,11 +115,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: libicu_darwin_universal
-          path: ./libicu_darwin_universal
+          path: .
 
       - name: Move binaries to correct locations
+        shell: bash
         run: |
-          mkdir ./nuget/uno.icu-macos/buildTransitive/libicu
+          mkdir nuget/uno.icu-macos/buildTransitive/libicu
           mv libicu_darwin_universal/{libicuuuc,libicudata}.dylib ./nuget/uno.icu-macos/buildTransitive/libicu
 
       - name: List files
