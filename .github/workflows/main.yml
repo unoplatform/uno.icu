@@ -73,7 +73,7 @@ jobs:
           name: libicu-darwin-${{ matrix.arch }}
           path: ./artifacts
 
-  package_macos:
+  build_libicu_darwin_universal:
     needs: [build_libicu_darwin]
     runs-on: 'macos-15'
     steps:
@@ -101,6 +101,46 @@ jobs:
         with:
           name: libicu_darwin_universal
           path: ./libicu_darwin_universal/*
+
+  package_macos:
+    needs: [ build_libicu_darwin_universal ]
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download universal libicu binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu_darwin_universal
+          path: ./libicu_darwin_universal
+
+      - name: Move binaries to correct locations
+        run: |
+          mkdir ./nuget/uno.icu-macos/buildTransitive/libicu
+          mv libicu_darwin_universal/{libicuuuc,libicudata}.dylib ./nuget/uno.icu-macos/buildTransitive/libicu
+
+      - name: List files
+        run: |
+          Get-ChildItem -Recurse .
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v1.7.2
+        with:
+          dotnet-version: 8.0.100
+
+      - name: Build nuget
+        run: |
+          pushd nuget
+          .\nuget.exe pack uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          popd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          path: ./nuget/*.nupkg
 
   package_wasm:
     needs: [build_unoicu, build_icudt]
@@ -166,8 +206,8 @@ jobs:
       - name: Build nuget
         run: |
           pushd nuget
-          .\nuget.exe pack uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
@@ -186,6 +226,7 @@ jobs:
 
     needs:
       - package_wasm
+      - package_macos
 
     steps:
       - name: Checkout
