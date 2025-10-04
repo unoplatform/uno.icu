@@ -143,14 +143,14 @@ jobs:
       - name: Move downloaded artifacts to correct locations
         shell: bash
         run: |
-          mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/build
+          mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/uno.icu-wasm/build
           
-          mkdir -p ./nuget/buildTransitive/native/unoicu.a
+          mkdir -p ./nuget/uno.icu-wasm/buildTransitive/native/unoicu.a
           pushd merged-artifacts
           for dir in unoicu-*; do
             new_name="${dir#unoicu-}"
-            mkdir -p ../nuget/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp -r "$dir"/unoicu.a ../nuget/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            mkdir -p ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/"$new_name"/st
+            cp -r "$dir"/unoicu.a ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
           done
           popd
 
@@ -167,6 +167,7 @@ jobs:
         run: |
           pushd nuget
           .\nuget.exe pack uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
