@@ -139,7 +139,7 @@ jobs:
       - name: Build nuget
         run: |
           pushd nuget
-          .\nuget.exe pack uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
@@ -212,7 +212,6 @@ jobs:
         run: |
           pushd nuget
           .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
