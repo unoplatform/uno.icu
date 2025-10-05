@@ -102,8 +102,8 @@ jobs:
           name: libicu_darwin_universal
           path: ./libicu_darwin_universal/*
 
-  package_macos:
-    needs: [ build_libicu_darwin_universal ]
+  package:
+    needs: [build_unoicu, build_icudt, build_libicu_darwin_universal]
     runs-on: windows-latest
 
     steps:
@@ -130,31 +130,6 @@ jobs:
       - name: List files
         run: |
           Get-ChildItem -Recurse .
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v1.7.2
-        with:
-          dotnet-version: 8.0.100
-
-      - name: Build nuget
-        run: |
-          pushd nuget
-          .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          popd
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nuget
-          path: ./nuget/*.nupkg
-
-  package_wasm:
-    needs: [build_unoicu, build_icudt]
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Merge unoicu.a artifacts
         uses: actions/upload-artifact/merge@v4
@@ -212,6 +187,7 @@ jobs:
         run: |
           pushd nuget
           .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
@@ -229,8 +205,7 @@ jobs:
       id-token: write # Required for requesting the JWT
 
     needs:
-      - package_wasm
-      - package_macos
+      - package
 
     steps:
       - name: Checkout
