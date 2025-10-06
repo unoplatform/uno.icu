@@ -12,8 +12,12 @@
         <description>The International Components for Unicode for WebAssembly</description>
         <copyright>Copyright (C) 2015-2025 Uno Platform inc. - all rights reserved</copyright>
         <repository type="git" url="https://github.com/unoplatform/Uno.icu-wasm.git" />
+
+        <contentFiles>
+            <files include="any/any/**/*.dylib" buildAction="Content" />
+        </contentFiles>
     </metadata>
     <files>
-        <file src="buildTransitive\**\*.*" target="buildTransitive" />
+        <file src="buildTransitive\Uno.icu-macos.nuspec" target="buildTransitive" />
     </files>
 </package>
