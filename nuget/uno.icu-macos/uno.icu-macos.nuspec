@@ -18,6 +18,6 @@
         </contentFiles>
     </metadata>
     <files>
-        <file src="buildTransitive\Uno.icu-macos.nuspec" target="buildTransitive" />
+        <file src="buildTransitive\Uno.icu-macos.targets" target="buildTransitive" />
     </files>
 </package>
