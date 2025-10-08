@@ -68,7 +68,7 @@ jobs:
           popd
           mkdir lib
           cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
-          if ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }} ; then
+          if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
             # used for crossbuild
             make -j $(sysctl -n hw.physicalcpu) install
             mkdir osx-arm64-make-install
