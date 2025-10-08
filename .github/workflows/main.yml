@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build icudt.dat
+      - name: Build ICU
         run: |
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
@@ -65,11 +65,12 @@ jobs:
           mkdir install_dir
           ./runConfigureICU macOS --prefix=$(pwd)/install_dir
           make -j $(sysctl -n hw.physicalcpu)
-          make -j $(sysctl -n hw.physicalcpu) install
           popd
           mkdir lib
           cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
           if ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }} ; then
+            # used for crossbuild
+            make -j $(sysctl -n hw.physicalcpu) install
             mkdir osx-arm64-make-install
             cp -r icu/$(ls icu)/icu4c/source/install_dir/* osx-arm64-make-install
           fi
