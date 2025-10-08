@@ -65,12 +65,14 @@ jobs:
           mkdir install_dir
           ./runConfigureICU macOS --prefix=$(pwd)/install_dir
           make -j $(sysctl -n hw.physicalcpu)
+          if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
+            # used for crossbuild
+            make -j $(sysctl -n hw.physicalcpu) install
+          fi
           popd
           mkdir lib
           cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
           if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
-            # used for crossbuild
-            make -j $(sysctl -n hw.physicalcpu) install
             mkdir osx-arm64-make-install
             cp -r icu/$(ls icu)/icu4c/source/install_dir/* osx-arm64-make-install
           fi
@@ -85,7 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.arch == 'arm64'
         with:
-          name: libicu-osx-${{ matrix.arch }}
+          name: libicu-osx-arm64-make-install
           path: ./osx-arm64-make-install
 
   build_libicu_osx_universal:
@@ -324,3 +326,28 @@ jobs:
 
       - name: Tag Release
         uses: ./.github/workflows/actions/tag-release
+
+
+  build_libicu_ios:
+    runs-on: 'macos-15' # arm64
+    needs: build_libicu_osx
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-osx-arm64-make-install
+          path: osx-arm64-make-install
+
+      - name: Build ICU
+        run: |
+          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          mkdir icu
+          unzip -d icu icu.zip
+          pushd icu/$(ls icu)/icu4c/source
+          mkdir install_dir
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build=$(pwd)/osx-arm64-make-install CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          make -j $(sysctl -n hw.physicalcpu)
+          popd
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
