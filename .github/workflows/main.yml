@@ -62,17 +62,30 @@ jobs:
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
           pushd icu/$(ls icu)/icu4c/source
-          ./runConfigureICU macOS
+          mkdir install_dir
+          ./runConfigureICU macOS --prefix=$(pwd)/install_dir
           make -j $(sysctl -n hw.physicalcpu)
+          make -j $(sysctl -n hw.physicalcpu) install
           popd
-          mkdir artifacts
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib artifacts
+          mkdir lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
+          if ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }} ; then
+            mkdir osx-arm64-make-install
+            cp -r icu/$(ls icu)/icu4c/source/install_dir/* osx-arm64-make-install
+          fi
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: libicu-darwin-${{ matrix.arch }}
-          path: ./artifacts
+          path: ./lib
+
+      - name: Upload 'make install' output
+        uses: actions/upload-artifact@v4
+        if: matrix.arch == 'arm64'
+        with:
+          name: libicu-darwin-${{ matrix.arch }}
+          path: ./osx-arm64-make-install
 
   build_libicu_darwin_universal:
     needs: [build_libicu_darwin]
