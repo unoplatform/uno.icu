@@ -47,7 +47,7 @@ jobs:
           name: icudt.dat
           path: ./src/cldr_data/icudt.dat
 
-  build_libicu_darwin:
+  build_libicu_osx:
     strategy:
       matrix:
         arch: [ 'x86_64','arm64' ]
@@ -78,47 +78,47 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: libicu-darwin-${{ matrix.arch }}
+          name: libicu-osx-${{ matrix.arch }}
           path: ./lib
 
       - name: Upload 'make install' output
         uses: actions/upload-artifact@v4
         if: matrix.arch == 'arm64'
         with:
-          name: libicu-darwin-${{ matrix.arch }}
+          name: libicu-osx-${{ matrix.arch }}
           path: ./osx-arm64-make-install
 
-  build_libicu_darwin_universal:
-    needs: [build_libicu_darwin]
+  build_libicu_osx_universal:
+    needs: [build_libicu_osx]
     runs-on: 'macos-15'
     steps:
       - name: Merge libicu binaries
         uses: actions/upload-artifact/merge@v4
         with:
-          name: libicu-darwin-merged
-          pattern: 'libicu-darwin-*'
+          name: libicu-osx-merged
+          pattern: 'libicu-osx-*'
           separate-directories: true
 
       - name: Download merged libicu binaries
         uses: actions/download-artifact@v4
         with:
-          name: libicu-darwin-merged
-          path: ./libicu-darwin-merged
+          name: libicu-osx-merged
+          path: ./libicu-osx-merged
 
       - name: Create universal libicu binaries
         run: |
-          mkdir libicu_darwin_universal
-          lipo -create libicu-darwin-merged/**/libicuuc.dylib -output libicu_darwin_universal/libicuuc.dylib
-          lipo -create libicu-darwin-merged/**/libicudata.dylib -output libicu_darwin_universal/libicudata.dylib
+          mkdir libicu_osx_universal
+          lipo -create libicu-osx-merged/**/libicuuc.dylib -output libicu_osx_universal/libicuuc.dylib
+          lipo -create libicu-osx-merged/**/libicudata.dylib -output libicu_osx_universal/libicudata.dylib
           
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
         with:
-          name: libicu_darwin_universal
-          path: ./libicu_darwin_universal/*
+          name: libicu_osx_universal
+          path: ./libicu_osx_universal/*
 
   package:
-    needs: [build_unoicu, build_icudt, build_libicu_darwin_universal]
+    needs: [build_unoicu, build_icudt, build_libicu_osx_universal]
     runs-on: windows-latest
 
     steps:
@@ -129,7 +129,7 @@ jobs:
       - name: Download universal libicu binaries
         uses: actions/download-artifact@v4
         with:
-          name: libicu_darwin_universal
+          name: libicu_osx_universal
           path: .
 
       - name: List files
