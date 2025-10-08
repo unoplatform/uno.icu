@@ -338,7 +338,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: libicu-osx-arm64-make-install
-          path: .
+          path: ./osx-arm64-make-install
+
+      - name: List directories
+        run: |
+          echo $(pwd)
+          ls -al osx-arm64-make-install
 
       - name: Build ICU
         run: |
