@@ -124,8 +124,8 @@ jobs:
       - name: Move binaries to correct locations
         shell: bash
         run: |
-          mkdir nuget/uno.icu-macos/buildTransitive/libicu
-          mv {libicuuc,libicudata}.dylib ./nuget/uno.icu-macos/buildTransitive/libicu
+          mkdir nuget/uno.icu-macos/libicu
+          mv {libicuuc,libicudata}.dylib ./nuget/uno.icu-macos/libicu
 
       - name: List files
         run: |
