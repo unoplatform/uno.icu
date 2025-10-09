@@ -115,7 +115,7 @@ jobs:
           path: ./libicu_osx_universal/*
 
   package:
-    needs: [build_unoicu, build_icudt, build_libicu_osx_universal]
+    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios]
     runs-on: windows-latest
 
     steps:
@@ -123,11 +123,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download universal libicu binaries
+      - name: List files
+        run: |
+          Get-ChildItem -Recurse .
+
+      - name: List files
+        run: |
+          Get-ChildItem -Recurse .
+
+      - name: Merge artifacts
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: merged-artifacts
+          pattern: '{libicu_osx_universal, libicu_iossim_universal, libicu_ios, unoicu-*, icudt.dat}'
+          separate-directories: true
+
+      - name: Download merged artifacts
         uses: actions/download-artifact@v4
         with:
-          name: libicu_osx_universal
-          path: .
+          name: merged-artifacts
+          path: ./merged-artifacts
 
       - name: List files
         run: |
@@ -137,46 +152,14 @@ jobs:
         shell: bash
         run: |
           mkdir nuget/uno.icu-macos/libicu
-          mv {libicuuc,libicudata}.dylib ./nuget/uno.icu-macos/libicu
+          mv merged-artifacts/libicu_osx_universal/{libicuuc,libicudata}.dylib ./nuget/uno.icu-macos/libicu
+          mkdir nuget/uno.icu-ios/iossim
+          mv merged-artifacts/libicu_iossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/iossim
+          mkdir nuget/uno.icu-ios/ios
+          mv merged-artifacts/libicu_ios/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/ios
 
-      - name: List files
-        run: |
-          Get-ChildItem -Recurse .
-
-      - name: Merge unoicu.a artifacts
-        uses: actions/upload-artifact/merge@v4
-        with:
-          name: unoicu-merged
-          pattern: 'unoicu-*'
-          separate-directories: true
-
-      - name: Download merged unoicu.a artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: unoicu-merged
-          path: ./merged-artifacts
-
-      - name: Download icudt.dat
-        uses: actions/download-artifact@v4
-        with:
-          name: icudt.dat
-          path: ./merged-artifacts/icudt.dat
-
-      - uses: dotnet/nbgv@f088059084cb5d872e9d1a994433ca6440c2bf72 # v0.4.2
-        id: nbgv
-        with:
-          toolVersion: 3.6.139
-          setAllVars: true
-
-      - name: List files
-        run: |
-          Get-ChildItem -Recurse .
-
-      - name: Move downloaded artifacts to correct locations
-        shell: bash
-        run: |
           mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/uno.icu-wasm/build
-          
+
           mkdir -p ./nuget/uno.icu-wasm/buildTransitive/native/unoicu.a
           pushd merged-artifacts
           for dir in unoicu-*; do
@@ -190,6 +173,12 @@ jobs:
         run: |
           Get-ChildItem -Recurse .
 
+      - uses: dotnet/nbgv@f088059084cb5d872e9d1a994433ca6440c2bf72 # v0.4.2
+        id: nbgv
+        with:
+          toolVersion: 3.6.139
+          setAllVars: true
+
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v1.7.2
         with:
@@ -200,6 +189,7 @@ jobs:
           pushd nuget
           .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-ios/uno.icu-ios.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4
@@ -322,8 +312,7 @@ jobs:
       - name: Tag Release
         uses: ./.github/workflows/actions/tag-release
 
-
-  build_libicu_ios:
+  build_libicu_iossim:
     strategy:
       matrix:
         arch: [ 'arm64', 'x86_64' ]
@@ -337,11 +326,6 @@ jobs:
         with:
           name: libicu-osx-arm64-build
           path: ./osx-arm64-build
-
-      - name: List directories
-        run: |
-          echo $(pwd)
-          ls -al osx-arm64-build
 
       - name: Build ICU
         run: |
@@ -360,34 +344,66 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: libicu-ios-${{ matrix.arch }}
+          name: libicu-iossim-${{ matrix.arch }}
           path: ./lib
 
-  build_libicu_ios_universal:
-    needs: [build_libicu_ios]
+  build_libicu_ios:
+    runs-on: 'macos-15' # arm64
+    needs: build_libicu_osx
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-osx-arm64-build
+          path: ./osx-arm64-build
+
+      - name: Build ICU
+        run: |
+          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          mkdir icu
+          unzip -d icu icu.zip
+          CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
+          chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
+          pushd icu/$(ls icu)/icu4c/source
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS=-stdlib=libc++ -lstdc++
+          make -j $(sysctl -n hw.physicalcpu)
+          popd
+          mkdir lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu_ios
+          path: ./lib
+
+  build_libicu_iossim_universal:
+    needs: [build_libicu_iossim]
     runs-on: 'macos-15'
     steps:
       - name: Merge libicu binaries
         uses: actions/upload-artifact/merge@v4
         with:
-          name: libicu-ios-merged
-          pattern: 'libicu-ios-*'
+          name: libicu-iossim-merged
+          pattern: 'libicu-iossim-*'
           separate-directories: true
 
       - name: Download merged libicu binaries
         uses: actions/download-artifact@v4
         with:
-          name: libicu-ios-merged
-          path: ./libicu-ios-merged
+          name: libicu-iossim-merged
+          path: ./libicu-iossim-merged
 
       - name: Create universal libicu binaries
         run: |
-          mkdir libicu_ios_universal
-          lipo -create libicu-ios-merged/**/libicuuc.a -output libicu_ios_universal/libicuuc.a
-          lipo -create libicu-ios-merged/**/libicudata.a -output libicu_ios_universal/libicudata.a
+          mkdir libicu_iossim_universal
+          lipo -create libicu-iossim-merged/**/libicuuc.a -output libicu_iossim_universal/libicuuc.a
+          lipo -create libicu-iossim-merged/**/libicudata.a -output libicu_iossim_universal/libicudata.a
 
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
         with:
-          name: libicu_ios_universal
-          path: ./libicu_ios_universal/*
+          name: libicu_iossim_universal
+          path: ./libicu_iossim_universal/*
