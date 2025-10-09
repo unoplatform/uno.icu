@@ -61,17 +61,9 @@ jobs:
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
-          pushd icu/$(ls icu)/icu4c
-          mkdir install_dir
-          CONFIGURE_PREFIX=$(pwd)/install_dir
-          pushd source
-          ./runConfigureICU macOS --prefix=$CONFIGURE_PREFIX
+          pushd icu/$(ls icu)/icu4c/source
+          ./runConfigureICU macOS
           make -j $(sysctl -n hw.physicalcpu)
-          if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
-            # used for crossbuild
-            make -j $(sysctl -n hw.physicalcpu) install
-          fi
-          popd
           popd
           mkdir lib
           cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
