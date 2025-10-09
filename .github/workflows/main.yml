@@ -332,6 +332,9 @@ jobs:
 
 
   build_libicu_ios:
+    strategy:
+      matrix:
+        arch: [ 'arm64', 'x86_64' ]
     runs-on: 'macos-15' # arm64
     needs: build_libicu_osx
     steps:
@@ -356,8 +359,43 @@ jobs:
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
-          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
           make -j $(sysctl -n hw.physicalcpu)
           popd
-          mkdir lib_arm64
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib_arm64
+          mkdir lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu-ios-${{ matrix.arch }}
+          path: ./lib
+
+  build_libicu_ios_universal:
+    needs: [build_libicu_ios]
+    runs-on: 'macos-15'
+    steps:
+      - name: Merge libicu binaries
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: libicu-ios-merged
+          pattern: 'libicu-ios-*'
+          separate-directories: true
+
+      - name: Download merged libicu binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-ios-merged
+          path: ./libicu-ios-merged
+
+      - name: Create universal libicu binaries
+        run: |
+          mkdir libicu_ios_universal
+          lipo -create libicu-ios-merged/**/libicuuc.dylib -output libicu_ios_universal/libicuuc.dylib
+          lipo -create libicu-ios-merged/**/libicudata.dylib -output libicu_ios_universal/libicudata.dylib
+
+      - name: Upload universal libicu binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu_ios_universal
+          path: ./libicu_ios_universal/*
