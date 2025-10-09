@@ -135,7 +135,7 @@ jobs:
         uses: actions/upload-artifact/merge@v4
         with:
           name: merged-artifacts
-          pattern: '{libicu_osx_universal, libicu_iossim_universal, libicu_ios, unoicu-*, icudt.dat}'
+          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,unoicu-*,icudt.dat}'
           separate-directories: true
 
       - name: Download merged artifacts
@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           mkdir nuget/uno.icu-macos/libicu
-          mv merged-artifacts/libicu_osx_universal/{libicuuc,libicudata}.dylib ./nuget/uno.icu-macos/libicu
+          mv merged-artifacts/libicu_osx_universal/{libicuuc,libicudata}.dylib ./nuget/uno.icu-macosx/libicu
           mkdir nuget/uno.icu-ios/iossim
           mv merged-artifacts/libicu_iossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/iossim
           mkdir nuget/uno.icu-ios/ios
