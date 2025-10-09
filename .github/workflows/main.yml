@@ -383,8 +383,8 @@ jobs:
       - name: Create universal libicu binaries
         run: |
           mkdir libicu_ios_universal
-          lipo -create libicu-ios-merged/**/libicuuc.dylib -output libicu_ios_universal/libicuuc.dylib
-          lipo -create libicu-ios-merged/**/libicudata.dylib -output libicu_ios_universal/libicudata.dylib
+          lipo -create libicu-ios-merged/**/libicuuc.a -output libicu_ios_universal/libicuuc.a
+          lipo -create libicu-ios-merged/**/libicudata.a -output libicu_ios_universal/libicudata.a
 
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
