@@ -329,6 +329,7 @@ jobs:
 
       - name: Build ICU
         run: |
+          # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
@@ -361,13 +362,14 @@ jobs:
 
       - name: Build ICU
         run: |
+          # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
-          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS=-stdlib=libc++ -lstdc++
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
