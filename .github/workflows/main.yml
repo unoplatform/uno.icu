@@ -61,20 +61,23 @@ jobs:
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
-          pushd icu/$(ls icu)/icu4c/source
+          pushd icu/$(ls icu)/icu4c
           mkdir install_dir
-          ./runConfigureICU macOS --prefix=$(pwd)/install_dir
+          CONFIGURE_PREFIX=$(pwd)/install_dir
+          pushd source
+          ./runConfigureICU macOS --prefix=$CONFIGURE_PREFIX
           make -j $(sysctl -n hw.physicalcpu)
           if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
             # used for crossbuild
             make -j $(sysctl -n hw.physicalcpu) install
           fi
           popd
+          popd
           mkdir lib
           cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
           if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
-            mkdir osx-arm64-make-install
-            cp -r icu/$(ls icu)/icu4c/source/install_dir/* osx-arm64-make-install
+            mkdir osx-arm64-build
+            cp -r icu/$(ls icu)/icu4c/* osx-arm64-build
           fi
 
       - name: Upload binaries
@@ -83,12 +86,12 @@ jobs:
           name: libicu-osx-${{ matrix.arch }}
           path: ./lib
 
-      - name: Upload 'make install' output
+      - name: Upload whole build output for cross-compilation
         uses: actions/upload-artifact@v4
         if: matrix.arch == 'arm64'
         with:
-          name: libicu-osx-arm64-make-install
-          path: ./osx-arm64-make-install
+          name: libicu-osx-arm64-build
+          path: ./osx-arm64-build
 
   build_libicu_osx_universal:
     needs: [build_libicu_osx]
@@ -337,22 +340,22 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: libicu-osx-arm64-make-install
-          path: ./osx-arm64-make-install
+          name: libicu-osx-arm64-build
+          path: ./osx-arm64-build
 
       - name: List directories
         run: |
           echo $(pwd)
-          ls -al osx-arm64-make-install
+          ls -al osx-arm64-build
 
       - name: Build ICU
         run: |
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
-          CROSS_BUILD_DIR="$(pwd)/osx-arm64-make-install"
+          CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           pushd icu/$(ls icu)/icu4c/source
-          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR" CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib_arm64
