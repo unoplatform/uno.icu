@@ -11,7 +11,7 @@
         <iconUrl>https://nv-assets.azurewebsites.net/logos/uno.png</iconUrl>
         <description>The International Components for Unicode for WebAssembly</description>
         <copyright>Copyright (C) 2015-2025 Uno Platform inc. - all rights reserved</copyright>
-        <repository type="git" url="https://github.com/unoplatform/Uno.icu-wasm.git" />
+        <repository type="git" url="https://github.com/unoplatform/uno.icu.git" />
     </metadata>
     <files>
         <file src="libicu/libicuuc.dylib" target="runtimes/osx/native" />
