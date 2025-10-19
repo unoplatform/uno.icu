@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y make git python3 doxygen zip wget g++
 
 WORKDIR /icu
 
-ENV ICU_DATA_FILTER_FILE=/icu/filters.json
-COPY filters.json .
+ENV ICU_DATA_FILTER_FILE=/icu/filters_wasm.json
+COPY filters_wasm.json .
 
 RUN wget ${ICU_SOURCE_ZIP_URL}
 RUN unzip release-77-1.zip
