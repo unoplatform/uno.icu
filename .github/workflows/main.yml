@@ -333,6 +333,7 @@ jobs:
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
@@ -366,6 +367,7 @@ jobs:
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
