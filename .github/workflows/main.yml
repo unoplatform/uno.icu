@@ -61,6 +61,7 @@ jobs:
           mkdir icu
           unzip -d icu icu.zip
           pushd icu/$(ls icu)/icu4c/source
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
           ./runConfigureICU macOS
           make -j $(sysctl -n hw.physicalcpu)
           popd
