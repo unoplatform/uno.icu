@@ -2,10 +2,22 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
     <ItemGroup Condition="'$(IsUnoHead)' == 'True'">
-        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicuuc.a" />
-        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a" />
-        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicuuc.a" />
-        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicudata.a" />
+        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicuuc.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicuuc.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
     </ItemGroup>
 
 </Project>
