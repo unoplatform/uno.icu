@@ -21,7 +21,8 @@
         "brkitr_tree": "include",
         "uemoji": "include",
         "cnvalias": "include",
-        "locales_tree": "include"
+        "locales_tree": "include",
+        "ulayout": "include"
     },
     "localeFilter": {
         "filterType": "locale",
