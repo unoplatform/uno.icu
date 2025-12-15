@@ -51,12 +51,10 @@ jobs:
     runs-on: windows-2025
     strategy:
       matrix:
-        platform: [x64, ARM64]
+        platform: [x64]
         include:
           - platform: x64
             bin_dir: bin64
-          - platform: ARM64
-            bin_dir: bin64ARM
     steps:
       - uses: microsoft/setup-msbuild@v2
         
