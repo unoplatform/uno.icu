@@ -71,6 +71,8 @@ jobs:
           # Build in dependency order
           msbuild stubdata\stubdata.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
           msbuild common\common.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
+          msbuild i18n\i18n.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
+          msbuild tools\toolutil\toolutil.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
           msbuild data\makedata.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
 
           Pop-Location
