@@ -62,24 +62,18 @@ jobs:
       - uses: actions/checkout@v2
   
       - name: Build ICU
-        shell: bash
+        shell: pwsh
         run: |
-          curl -L -o icu.zip $ICU_SOURCE_ZIP_URL
-          unzip -d icu icu.zip
-          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
-          pushd icu/*/icu4c
-          msbuild source\\allinone\\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true
-          popd
-          mkdir lib
-          icuDir=$(ls icu)
-          cp icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuuc*.dll lib
-          cp icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icudt*.dll lib
-  
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: libicu-windows-${{ matrix.platform }}
-          path: ./lib
+          curl -L -o icu.zip $env:ICU_SOURCE_ZIP_URL
+          Expand-Archive icu.zip -DestinationPath icu
+          $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
+          Push-Location icu/*/icu4c
+          msbuild source\allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true
+          Pop-Location
+          New-Item -ItemType Directory -Path lib
+          $icuDir = (Get-ChildItem icu).Name
+          Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuuc*.dll" lib
+          Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icudt*.dll" lib
 
   build_libicu_osx:
     strategy:
