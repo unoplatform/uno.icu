@@ -59,20 +59,31 @@ jobs:
       - uses: microsoft/setup-msbuild@v2
         
       - uses: actions/checkout@v2
-  
+
       - name: Build ICU
         shell: pwsh
         run: |
           curl -L -o icu.zip $env:ICU_SOURCE_ZIP_URL
           Expand-Archive icu.zip -DestinationPath icu
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
-          Push-Location icu/*/icu4c
-          msbuild source\allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0
+          Push-Location icu/*/icu4c/source
+
+          # Build in dependency order
+          msbuild stubdata\stubdata.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
+          msbuild common\common.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
+          msbuild data\makedata.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:WindowsTargetPlatformVersion=10.0.26100.0
+
           Pop-Location
           New-Item -ItemType Directory -Path lib
           $icuDir = (Get-ChildItem icu).Name
           Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuuc*.dll" lib
           Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icudt*.dll" lib
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu-windows-${{ matrix.platform }}
+          path: ./lib
 
   build_libicu_osx:
     strategy:
