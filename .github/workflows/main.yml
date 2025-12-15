@@ -60,7 +60,7 @@ jobs:
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
-          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
           pushd icu/$(ls icu)/icu4c/source
           ./runConfigureICU macOS
           make -j $(sysctl -n hw.physicalcpu)
@@ -325,7 +325,7 @@ jobs:
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
-          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
@@ -359,7 +359,7 @@ jobs:
           curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
           mkdir icu
           unzip -d icu icu.zip
-          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters_macosios.json"
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
