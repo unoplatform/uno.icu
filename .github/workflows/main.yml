@@ -47,6 +47,39 @@ jobs:
           name: icudt.dat
           path: ./src/cldr_data/icudt.dat
 
+  build_libicu_windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        platform: [x64, ARM64]
+        include:
+          - platform: x64
+            bin_dir: bin64
+          - platform: ARM64
+            bin_dir: bin64ARM
+    steps:
+      - uses: actions/checkout@v2
+  
+      - name: Build ICU
+        shell: bash
+        run: |
+          curl -L -o icu.zip $ICU_SOURCE_ZIP_URL
+          unzip -d icu icu.zip
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
+          pushd icu/*/icu4c
+          msbuild source\\allinone\\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true
+          popd
+          mkdir lib
+          icuDir=$(ls icu)
+          cp icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuuc*.dll lib
+          cp icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icudt*.dll lib
+  
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu-windows-${{ matrix.platform }}
+          path: ./lib
+
   build_libicu_osx:
     strategy:
       matrix:
