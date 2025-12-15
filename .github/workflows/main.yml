@@ -48,16 +48,19 @@ jobs:
           path: ./src/cldr_data/icudt.dat
 
   build_libicu_windows:
-    runs-on: windows-2025
+    runs-on: ${{ matrix.platform == 'ARM64' && 'windows-2025-arm64' || 'windows-2025' }}
     strategy:
       matrix:
-        platform: [x64]
+        platform: [x64, ARM64]
         include:
           - platform: x64
             bin_dir: bin64
+          - platform: ARM64
+            bin_dir: bin64
+
     steps:
       - uses: microsoft/setup-msbuild@v2
-        
+
       - uses: actions/checkout@v2
 
       - name: Build ICU
@@ -68,7 +71,9 @@ jobs:
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
           Push-Location icu/*/icu4c/source
 
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:stubdata;common;i18n;toolutil;makedata" /m
+          # Build target platform libraries
+          Write-Host "Building ${{ matrix.platform }} libraries..."
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;makedata" /m
 
           Pop-Location
           New-Item -ItemType Directory -Path lib
