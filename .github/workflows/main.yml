@@ -58,6 +58,7 @@ jobs:
           - platform: ARM64
             bin_dir: bin64ARM
     steps:
+      - uses: microsoft/setup-msbuild@v2
       - uses: actions/checkout@v2
   
       - name: Build ICU
