@@ -49,14 +49,6 @@ jobs:
 
   build_libicu_windows:
     runs-on: 'windows-2025'
-    strategy:
-      matrix:
-        platform: [x64, ARM64]
-        include:
-          - platform: x64
-            bin_dir: bin64
-          - platform: ARM64
-            bin_dir: bin64\ARM64
     
     steps:
       - uses: microsoft/setup-msbuild@v2
