@@ -48,7 +48,7 @@ jobs:
           path: ./src/cldr_data/icudt.dat
 
   build_libicu_windows:
-    runs-on: ${{ matrix.platform == 'ARM64' && 'windows-2025-arm64' || 'windows-2025' }}
+    runs-on: 'windows-2025'
     strategy:
       matrix:
         platform: [x64, ARM64]
@@ -56,13 +56,13 @@ jobs:
           - platform: x64
             bin_dir: bin64
           - platform: ARM64
-            bin_dir: bin64
-
+            bin_dir: bin64\ARM64
+    
     steps:
       - uses: microsoft/setup-msbuild@v2
-
+    
       - uses: actions/checkout@v2
-
+    
       - name: Build ICU
         shell: pwsh
         run: |
@@ -70,17 +70,24 @@ jobs:
           Expand-Archive icu.zip -DestinationPath icu
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
           Push-Location icu/*/icu4c/source
-
+    
+          # For ARM64, first build x64 tools (they run during the build on the host)
+          if ("${{ matrix.platform }}" -eq "ARM64") {
+            Write-Host "Building x64 tools for ARM64 cross-compilation..."
+            msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;toolutil" /m
+          }
+    
           # Build target platform libraries
           Write-Host "Building ${{ matrix.platform }} libraries..."
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;makedata" /m
-
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
+    
           Pop-Location
           New-Item -ItemType Directory -Path lib
           $icuDir = (Get-ChildItem icu).Name
           Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuuc*.dll" lib
           Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icudt*.dll" lib
-
+          Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuin*.dll" lib
+    
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
