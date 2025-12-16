@@ -70,29 +70,30 @@ jobs:
           Expand-Archive icu.zip -DestinationPath icu
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
           Push-Location icu/*/icu4c/source
-    
-          # For ARM64, first build x64 tools (they run during the build on the host)
-          if ("${{ matrix.platform }}" -eq "ARM64") {
-            Write-Host "Building x64 tools for ARM64 cross-compilation..."
-            msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;toolutil" /m
-          }
-    
-          # Build target platform libraries
-          Write-Host "Building ${{ matrix.platform }} libraries..."
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
+          
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
     
           Pop-Location
-          New-Item -ItemType Directory -Path lib
+          New-Item -ItemType Directory -Path libx64
+          New-Item -ItemType Directory -Path libARM64
           $icuDir = (Get-ChildItem icu).Name
-          Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuuc*.dll" lib
-          Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icudt*.dll" lib
-          Copy-Item "icu/$icuDir/icu4c/${{ matrix.bin_dir }}/icuin*.dll" lib
-    
-      - name: Upload binaries
+          Copy-Item "icu/$icuDir/icu4c/bin64/icuuc*.dll" libx64
+          Copy-Item "icu/$icuDir/icu4c/bin64/icudt*.dll" libx64
+          Copy-Item "icu/$icuDir/icu4c/binARM64/icuuc*.dll" libARM64
+          Copy-Item "icu/$icuDir/icu4c/binARM64/icudt*.dll" libARM64
+
+      - name: Upload binaries (x64)
         uses: actions/upload-artifact@v4
         with:
-          name: libicu-windows-${{ matrix.platform }}
-          path: ./lib
+          name: libicu-windows-x64
+          path: ./libx64
+
+      - name: Upload binaries (ARM64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu-windows-arm64
+          path: ./libARM64
 
   build_libicu_osx:
     strategy:
