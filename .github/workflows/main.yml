@@ -63,8 +63,8 @@ jobs:
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
           Push-Location icu/*/icu4c/source
           
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n;stubdata;makedata" /m
     
           Pop-Location
           New-Item -ItemType Directory -Path libx64
