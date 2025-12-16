@@ -163,7 +163,7 @@ jobs:
           path: ./libicu_osx_universal/*
 
   package:
-    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios]
+    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_windows]
     runs-on: windows-latest
 
     steps:
@@ -175,7 +175,7 @@ jobs:
         uses: actions/upload-artifact/merge@v4
         with:
           name: merged-artifacts
-          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,unoicu-*,icudt.dat}'
+          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,libicu-windows-*,unoicu-*,icudt.dat}'
           separate-directories: true
 
       - name: Download merged artifacts
@@ -197,6 +197,11 @@ jobs:
           mv merged-artifacts/libicu_iossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/iossim
           mkdir nuget/uno.icu-ios/ios
           mv merged-artifacts/libicu_ios/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/ios
+
+          mkdir -p nuget/uno.icu-win/libicu/x64
+          mv merged-artifacts/libicu-windows-x64/* ./nuget/uno.icu-win/libicu/x64
+          mkdir -p nuget/uno.icu-win/libicu/arm64
+          mv merged-artifacts/libicu-windows-arm64/* ./nuget/uno.icu-win/libicu/arm64
 
           mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/uno.icu-wasm/build
 
@@ -230,6 +235,7 @@ jobs:
           .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-ios/uno.icu-ios.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-win/uno.icu-win.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
       - uses: actions/upload-artifact@v4

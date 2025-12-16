@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+    <metadata minClientVersion="5.0.0">
+        <id>Uno.icu-win</id>
+        <version>0.0.1</version>
+        <title>Uno ICU for Windows</title>
+        <authors>Uno Platform</authors>
+        <owners>unoplatform</owners>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <projectUrl>https://github.com/unoplatform/uno.icu</projectUrl>
+        <iconUrl>https://nv-assets.azurewebsites.net/logos/uno.png</iconUrl>
+        <description>The International Components for Unicode for Windows</description>
+        <copyright>Copyright (C) 2015-2025 Uno Platform inc. - all rights reserved</copyright>
+        <repository type="git" url="https://github.com/unoplatform/uno.icu.git" />
+    </metadata>
+    <files>
+        <file src="libicu/x64/libicuuc.dll" target="runtimes/win-x64/native" />
+        <file src="libicu/x64/libicudt.dll" target="runtimes/win-x64/native" />
+        <file src="libicu/arm64/libicuuc.dll" target="runtimes/win-arm64/native" />
+        <file src="libicu/arm64/libicudt.dll" target="runtimes/win-arm64/native" />
+    </files>
+</package>
+
