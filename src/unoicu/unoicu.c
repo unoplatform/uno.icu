@@ -4,6 +4,8 @@
 #include <unicode/utypes.h>
 #include <unicode/udata.h>
 #include <unicode/ubrk.h>
+#include <unicode/ubidi.h>
+#include <unicode/uversion.h>
 
 int loaded_icu_data = false;
 
@@ -34,6 +36,42 @@ int32_t next_line_breaking_opportunity(UBreakIterator *breaker) {
     } else {
         return next;
     }
+}
+
+// The below are wrappers for the ICU functions used by Uno. This is necessary for
+// NativeAOT where these symbols, which are normally read from __Internal, fail
+// to be found, so we provide our own with a prefix to avoid conflicts.
+
+UBiDi* uno_ubidi_open(void) {
+    return ubidi_open();
+}
+
+void uno_ubidi_close(UBiDi *pBiDi) {
+    ubidi_close(pBiDi);
+}
+
+void uno_ubidi_setPara(UBiDi *pBiDi, const UChar *text, int32_t length, UBiDiLevel paraLevel, UBiDiLevel *embeddingLevels, UErrorCode *pErrorCode) {
+    ubidi_setPara(pBiDi, text, length, paraLevel, embeddingLevels, pErrorCode);
+}
+
+void uno_ubidi_getLogicalRun(const UBiDi *pBiDi, int32_t logicalPosition, int32_t *pLogicalLimit, UBiDiLevel *pLevel) {
+    ubidi_getLogicalRun(pBiDi, logicalPosition, pLogicalLimit, pLevel);
+}
+
+int32_t uno_ubidi_countRuns(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+    return ubidi_countRuns(pBiDi, pErrorCode);
+}
+
+UBiDiDirection uno_ubidi_getVisualRun(UBiDi *pBiDi, int32_t runIndex, int32_t *pLogicalStart, int32_t *pLength) {
+    return ubidi_getVisualRun(pBiDi, runIndex, pLogicalStart, pLength);
+}
+
+void uno_u_getVersion(UVersionInfo versionArray) {
+    u_getVersion(versionArray);
+}
+
+void uno_u_versionToString(const UVersionInfo versionArray, char *versionString) {
+    u_versionToString(versionArray, versionString);
 }
 
 // TEST CODE: DO NOT COMPILE THIS IN
