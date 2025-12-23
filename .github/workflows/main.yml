@@ -102,11 +102,11 @@ jobs:
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
           pushd icu/$(ls icu)/icu4c/source
-          ./runConfigureICU macOS --with-data-packaging=stubdata
+          ./runConfigureICU macOS --with-data-packaging=archive
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/stubdata/libicudata.dylib lib
           if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
             mkdir osx-arm64-build
             cp -r icu/$(ls icu)/icu4c/* osx-arm64-build
