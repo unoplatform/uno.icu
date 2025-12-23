@@ -14,7 +14,7 @@ WORKDIR icu-release-77-1/icu4c/source
 # Thanks to https://github.com/echogarden-project/icu-segmentation-wasm/blob/1f0c7381f76e0d38784dd6ad23fed5f6365da319/docs/Building.md
 # for documenting the necessary configure options
 
-RUN emconfigure ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tests --disable-samples --disable-tools --disable-extras CFLAGS="-O3 -std=c11" CXXFLAGS="-O3 -std=c++17"
+RUN emconfigure ./configure --enable-static --disable-shared --disable-tests --disable-samples --disable-tools --disable-extras CFLAGS="-O3 -std=c11" CXXFLAGS="-O3 -std=c++17"
 RUN emmake make -j $(nproc)
 
 COPY unoicu.c .
