@@ -72,6 +72,10 @@ void uno_u_versionToString(const UVersionInfo versionArray, char *versionString)
     u_versionToString(versionArray, versionString);
 }
 
+const char* uno_u_errorName(UErrorCode code) {
+    return u_errorName(code);
+}
+
 // TEST CODE: DO NOT COMPILE THIS IN
 // int main(int argc, char **argv) {
 //     UChar* text = u"Hello ragaa";
