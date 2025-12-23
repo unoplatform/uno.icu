@@ -6,12 +6,18 @@
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
+        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
         <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicuuc.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
+        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
     </ItemGroup>
-
-    <Import Project="$(MSBuildThisFileDirectory)Uno.icu.Common.targets" />
 
 </Project>
