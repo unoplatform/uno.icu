@@ -15,8 +15,10 @@
     </metadata>
     <files>
         <file src="buildTransitive\Uno.icu-wasm.targets" target="buildTransitive" />
+        <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
         <file src="buildTransitive\native\**" target="buildTransitive\native" />
+        <file src="..\icudt.dat" target="buildTransitive" />
         <file src="build\Uno.icu-wasm.props" target="build" />
-        <file src="build\icudt.dat" target="build" />
+        <file src="..\icudt.dat" target="build" />
     </files>
 </package>

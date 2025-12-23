@@ -15,9 +15,9 @@
     </metadata>
     <files>
         <file src="buildTransitive\Uno.icu-ios.targets" target="buildTransitive" />
+        <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
+        <file src="..\icudt.dat" target="buildTransitive" />
         <file src="ios\libicuuc.a" target="buildTransitive\ios" />
-        <file src="ios\libicudata.a" target="buildTransitive\ios" />
         <file src="iossim\libicuuc.a" target="buildTransitive\iossim" />
-        <file src="iossim\libicudata.a" target="buildTransitive\iossim" />
     </files>
 </package>

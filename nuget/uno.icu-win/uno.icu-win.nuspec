@@ -14,10 +14,11 @@
         <repository type="git" url="https://github.com/unoplatform/uno.icu.git" />
     </metadata>
     <files>
+        <file src="buildTransitive\Uno.icu-win.targets" target="buildTransitive" />
+        <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
+        <file src="..\icudt.dat" target="buildTransitive" />
         <file src="libicu/x64/icuuc77.dll" target="runtimes/win-x64/native" />
-        <file src="libicu/x64/icudt77.dll" target="runtimes/win-x64/native" />
         <file src="libicu/arm64/icuuc77.dll" target="runtimes/win-arm64/native" />
-        <file src="libicu/arm64/icudt77.dll" target="runtimes/win-arm64/native" />
     </files>
 </package>
 
