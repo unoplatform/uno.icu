@@ -18,6 +18,5 @@
         <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
         <file src="..\icudt.dat" target="buildTransitive" />
         <file src="buildTransitive\native\**" target="buildTransitive\native" />
-        <file src="build\Uno.icu-wasm.props" target="build" />
     </files>
 </package>
