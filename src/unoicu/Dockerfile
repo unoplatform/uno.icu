@@ -20,7 +20,6 @@ RUN emmake make -j $(nproc)
 COPY unoicu.c .
 RUN emcc -I common -c unoicu.c
 RUN emar x lib/libicuuc.a
-RUN emar x stubdata/libicudata.a
 RUN emar rc unoicu.a *.ao unoicu.o
 
 

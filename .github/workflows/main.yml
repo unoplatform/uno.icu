@@ -104,7 +104,7 @@ jobs:
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib lib
           if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
             mkdir osx-arm64-build
             cp -r icu/$(ls icu)/icu4c/* osx-arm64-build
@@ -144,7 +144,6 @@ jobs:
         run: |
           mkdir libicu_osx_universal
           lipo -create libicu-osx-merged/**/libicuuc.dylib -output libicu_osx_universal/libicuuc.dylib
-          lipo -create libicu-osx-merged/**/libicudata.dylib -output libicu_osx_universal/libicudata.dylib
           
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
@@ -373,7 +372,7 @@ jobs:
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
-          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          ./configure --enable-static --disable-shared --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
@@ -440,7 +439,6 @@ jobs:
         run: |
           mkdir libicu_iossim_universal
           lipo -create libicu-iossim-merged/**/libicuuc.a -output libicu_iossim_universal/libicuuc.a
-          lipo -create libicu-iossim-merged/**/libicudata.a -output libicu_iossim_universal/libicudata.a
 
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
