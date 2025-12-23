@@ -63,15 +63,17 @@ jobs:
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
           Push-Location icu/*/icu4c/source
           
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n" /m
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;i18n" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;stubdata" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;stubdata" /m
     
           Pop-Location
           New-Item -ItemType Directory -Path libx64
           New-Item -ItemType Directory -Path libARM64
           $icuDir = (Get-ChildItem icu).Name
           Copy-Item "icu/$icuDir/icu4c/bin64/icuuc*.dll" libx64
+          Copy-Item "icu/$icuDir/icu4c/bin64/icudt*.dll" libx64
           Copy-Item "icu/$icuDir/icu4c/binARM64/icuuc*.dll" libARM64
+          Copy-Item "icu/$icuDir/icu4c/binARM64/icudt*.dll" libARM64
 
       - name: Upload binaries (x64)
         uses: actions/upload-artifact@v4
@@ -100,11 +102,11 @@ jobs:
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
           pushd icu/$(ls icu)/icu4c/source
-          ./runConfigureICU macOS
+          ./runConfigureICU macOS --with-data-packaging=stubdata
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.dylib icu/$(ls icu)/icu4c/source/lib/libicudata.dylib lib
           if ${{ matrix.arch == 'arm64' && 'true' || 'false' }} ; then
             mkdir osx-arm64-build
             cp -r icu/$(ls icu)/icu4c/* osx-arm64-build
@@ -144,6 +146,7 @@ jobs:
         run: |
           mkdir libicu_osx_universal
           lipo -create libicu-osx-merged/**/libicuuc.dylib -output libicu_osx_universal/libicuuc.dylib
+          lipo -create libicu-osx-merged/**/libicudata.dylib -output libicu_osx_universal/libicudata.dylib
           
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
@@ -181,16 +184,16 @@ jobs:
         shell: bash
         run: |
           mkdir nuget/uno.icu-macos/libicu
-          mv merged-artifacts/libicu_osx_universal/libicuuc.dylib ./nuget/uno.icu-macos/libicu
+          mv merged-artifacts/libicu_osx_universal/{libicuuc,libicudata}.dylib ./nuget/uno.icu-macos/libicu
           mkdir nuget/uno.icu-ios/iossim
-          mv merged-artifacts/libicu_iossim_universal/libicuuc.a ./nuget/uno.icu-ios/iossim
+          mv merged-artifacts/libicu_iossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/iossim
           mkdir nuget/uno.icu-ios/ios
-          mv merged-artifacts/libicu_ios/libicuuc.a ./nuget/uno.icu-ios/ios
+          mv merged-artifacts/libicu_ios/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/ios
 
           mkdir -p nuget/uno.icu-win/libicu/x64
-          mv merged-artifacts/libicu-windows-x64/icuuc*.dll ./nuget/uno.icu-win/libicu/x64
+          mv merged-artifacts/libicu-windows-x64/* ./nuget/uno.icu-win/libicu/x64
           mkdir -p nuget/uno.icu-win/libicu/arm64
-          mv merged-artifacts/libicu-windows-arm64/icuuc*.dll ./nuget/uno.icu-win/libicu/arm64
+          mv merged-artifacts/libicu-windows-arm64/* ./nuget/uno.icu-win/libicu/arm64
 
           mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/
 
@@ -372,11 +375,11 @@ jobs:
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
-          ./configure --enable-static --disable-shared --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4" CXXFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk -mios-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -406,11 +409,11 @@ jobs:
           CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
           chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
           pushd icu/$(ls icu)/icu4c/source
-          ./configure --enable-static --disable-shared --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -mios-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
           make -j $(sysctl -n hw.physicalcpu)
           popd
           mkdir lib
-          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -439,6 +442,7 @@ jobs:
         run: |
           mkdir libicu_iossim_universal
           lipo -create libicu-iossim-merged/**/libicuuc.a -output libicu_iossim_universal/libicuuc.a
+          lipo -create libicu-iossim-merged/**/libicudata.a -output libicu_iossim_universal/libicudata.a
 
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
