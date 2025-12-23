@@ -9,12 +9,6 @@
 
 int loaded_icu_data = false;
 
-char* uno_udata_setCommonData(const void* bytes) {
-    UErrorCode errorCode = U_ZERO_ERROR;
-    udata_setCommonData(bytes, &errorCode);
-    return U_FAILURE(errorCode) ? u_errorName(errorCode) : NULL;
-}
-
 UBreakIterator* init_line_breaker(UChar* chars) {
     UErrorCode status = U_ZERO_ERROR;
 
@@ -41,6 +35,10 @@ int32_t next_line_breaking_opportunity(UBreakIterator *breaker) {
 // The below are wrappers for the ICU functions used by Uno. This is necessary for
 // NativeAOT where these symbols, which are normally read from __Internal, fail
 // to be found, so we provide our own with a prefix to avoid conflicts.
+
+void uno_udata_setCommonData(const void* data, UErrorCode* pErrorCode) {
+    udata_setCommonData(data, pErrorCode);
+}
 
 UBiDi* uno_ubidi_open(void) {
     return ubidi_open();
