@@ -31,14 +31,25 @@ jobs:
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
-          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --build-arg IS_MULTITHREADED=${{ matrix.multithreaded }} --build-arg IS_SIMD_SUPPORTED=${{ matrix.simd }} --output type=local,dest=out/${{ matrix.EMSCRIPTEN_VERSION }}/${{ matrix.multithreaded && 'mt' || 'st' }}${{ matrix.simd && ',simd' || '' }} .
+          FEATURE_DIR=$([ "${{ matrix.multithreaded }}" = 'true' ] && echo 'mt' || echo 'st')
+          SIMD_SUFFIX=$([ "${{ matrix.simd }}" = 'true' ] && echo ',simd' || echo '')
+          TEMP_SIMD_TAG=$([ "${{ matrix.simd }}" = 'true' ] && echo 'simd' || echo 'nosimd')
+          TEMP_OUTPUT="out/${{ matrix.EMSCRIPTEN_VERSION }}/${FEATURE_DIR}-${TEMP_SIMD_TAG}"
+          mkdir -p "${TEMP_OUTPUT}"
+
+          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --build-arg IS_MULTITHREADED=${{ matrix.multithreaded }} --build-arg IS_SIMD_SUPPORTED=${{ matrix.simd }} --output type=local,dest=${TEMP_OUTPUT} .
+
+          FINAL_DIR="out/unoicu.a/${{ matrix.EMSCRIPTEN_VERSION }}/${FEATURE_DIR}${SIMD_SUFFIX}"
+          mkdir -p "${FINAL_DIR}"
+          mv "${TEMP_OUTPUT}/unoicu.a" "${FINAL_DIR}/unoicu.a"
+          rm -rf "out/${{ matrix.EMSCRIPTEN_VERSION }}"
           popd
 
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
           name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}-${{ matrix.multithreaded && 'mt' || 'st' }}-${{ matrix.simd && 'simd' || 'nosimd' }}
-          path: ./src/unoicu/out
+          path: ./src/unoicu/out/unoicu.a
 
   build_icudt:
     runs-on: ubuntu-latest
@@ -210,9 +221,7 @@ jobs:
           mkdir -p ./nuget/uno.icu-wasm/buildTransitive/native/unoicu.a
           pushd merged-artifacts
           for dir in unoicu-*; do
-            new_name="${dir#unoicu-}"
-            mkdir -p ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp -r "$dir"/unoicu.a ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            cp -R "$dir"/unoicu.a/* ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/
           done
           popd
 
