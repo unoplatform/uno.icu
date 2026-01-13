@@ -1,4 +1,4 @@
-# Build this Dockerfile with  "docker build --build-arg EMSCRIPTEN_VERSION=<your-version> --build-arg IS_MULTITHREADED=<true|false> --build-arg IS_SIMD_SUPPORTED=<true|false> --output type=local,dest=. ." to get the unoicu.a file in the currect directory
+# Build this Dockerfile with  "docker build --build-arg EMSCRIPTEN_VERSION=<your-version> --build-arg IS_MULTITHREADED=<true|false> --build-arg IS_SIMD_SUPPORTED=<true|false> --output type=local,dest=. ." to get the unoicu.a file in the current directory
 ARG EMSCRIPTEN_VERSION
 
 FROM docker.io/emscripten/emsdk:${EMSCRIPTEN_VERSION} AS build
