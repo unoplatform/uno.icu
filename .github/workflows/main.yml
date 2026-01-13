@@ -31,13 +31,13 @@ jobs:
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
-          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --build-arg IS_MULTITHREADED=${{ matrix.multithreaded }} --build-arg IS_SIMD_SUPPORTED=${{ matrix.simd }} --output type=local,dest=out/${{ matrix.EMSCRIPTEN_VERSION }}/${{ matrix.multithreaded == 'true' && 'mt' || 'st' }}${{ matrix.simd == 'true' && ',simd' || '' }} .
+          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --build-arg IS_MULTITHREADED=${{ matrix.multithreaded }} --build-arg IS_SIMD_SUPPORTED=${{ matrix.simd }} --output type=local,dest=out/${{ matrix.EMSCRIPTEN_VERSION }}/${{ matrix.multithreaded && 'mt' || 'st' }}${{ matrix.simd && ',simd' || '' }} .
           popd
 
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
-          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}-${{ matrix.multithreaded == 'true' && 'mt' || 'st' }}-${{ matrix.simd == 'true' && 'simd' || 'nosimd' }}
+          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}-${{ matrix.multithreaded && 'mt' || 'st' }}-${{ matrix.simd && 'simd' || 'nosimd' }}
           path: ./src/unoicu/out
 
   build_icudt:
