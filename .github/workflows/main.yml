@@ -220,9 +220,18 @@ jobs:
 
           mkdir -p ./nuget/uno.icu-wasm/buildTransitive/native/unoicu.a
           pushd merged-artifacts
+          shopt -s nullglob
           for dir in unoicu-*; do
-            cp -R "$dir"/unoicu.a/* ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/
+            SRC_BASE="$dir/unoicu.a"
+            if [ ! -d "$SRC_BASE" ]; then
+              SRC_BASE="$dir"
+            fi
+
+            find "$SRC_BASE" -mindepth 1 -maxdepth 1 -type d ! -name '*nosimd*' -print0 | while IFS= read -r -d '' version_dir; do
+              cp -R "$version_dir" ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/
+            done
           done
+          find ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a -type d -name '*nosimd*' -exec rm -rf {} +
           popd
 
       - name: List files
