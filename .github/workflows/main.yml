@@ -22,21 +22,101 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        EMSCRIPTEN_VERSION: [ '3.1.12','3.1.34','3.1.56' ]
+        EMSCRIPTEN_VERSION: [ '3.1.56' ]
+        multithreaded: [true, false]
+        simd: [true, false]
     steps:
       - uses: actions/checkout@v2
 
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
-          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --output type=local,dest=./out .
+          FEATURE_DIR=$([ "${{ matrix.multithreaded }}" = 'true' ] && echo 'mt' || echo 'st')
+          SIMD_SUFFIX=$([ "${{ matrix.simd }}" = 'true' ] && echo ',simd' || echo '')
+          TEMP_SIMD_TAG=$([ "${{ matrix.simd }}" = 'true' ] && echo 'simd' || echo 'nosimd')
+          TEMP_OUTPUT="out/${{ matrix.EMSCRIPTEN_VERSION }}/${FEATURE_DIR}-${TEMP_SIMD_TAG}"
+          mkdir -p "${TEMP_OUTPUT}"
+
+          docker build --build-arg EMSCRIPTEN_VERSION=${{ matrix.EMSCRIPTEN_VERSION }} --build-arg IS_MULTITHREADED=${{ matrix.multithreaded }} --build-arg IS_SIMD_SUPPORTED=${{ matrix.simd }} --output type=local,dest=${TEMP_OUTPUT} .
+
+          FINAL_DIR="out/unoicu.a/${{ matrix.EMSCRIPTEN_VERSION }}/${FEATURE_DIR}${SIMD_SUFFIX}"
+          mkdir -p "${FINAL_DIR}"
+          mv "${TEMP_OUTPUT}/unoicu.a" "${FINAL_DIR}/unoicu.a"
+          rm -rf "out/${{ matrix.EMSCRIPTEN_VERSION }}"
           popd
 
       - name: Upload unoicu.a
         uses: actions/upload-artifact@v4
         with:
-          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}
-          path: ./src/unoicu/out
+          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}-${{ matrix.multithreaded && 'mt' || 'st' }}-${{ matrix.simd && 'simd' || 'nosimd' }}
+          path: ./src/unoicu/out/unoicu.a
+
+  validate_unoicu:
+    needs: build_unoicu
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        EMSCRIPTEN_VERSION: [ '3.1.56' ]
+        multithreaded: [true, false]
+        simd: [true, false]
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download unoicu artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: unoicu-${{ matrix.EMSCRIPTEN_VERSION }}-${{ matrix.multithreaded && 'mt' || 'st' }}-${{ matrix.simd && 'simd' || 'nosimd' }}
+          path: validation/artifacts
+
+      - name: Prepare validation app
+        run: |
+          set -euo pipefail
+          mkdir -p validation/app
+          UNO_LIB=$(find validation/artifacts -name unoicu.a -print -quit)
+          if [ -z "$UNO_LIB" ]; then
+            echo "unoicu.a artifact not found" >&2
+            exit 1
+          fi
+          cp "$UNO_LIB" validation/app/unoicu.a
+          cp src/unoicu/validation/main.c validation/app/main.c
+          cp src/unoicu/validation/run-test.js validation/app/run-test.js
+
+      - name: Install Puppeteer
+        working-directory: validation/app
+        run: npm install puppeteer@23
+
+      - name: Download ICU headers
+        run: |
+          set -euo pipefail
+          mkdir -p validation/icu
+          curl -sSL ${ICU_SOURCE_ZIP_URL} -o validation/icu/icu.zip
+          unzip -q validation/icu/icu.zip -d validation/icu
+
+      - name: Build validation wasm
+        run: |
+          set -euo pipefail
+          ICU_SUBDIR=$(find validation/icu -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | head -n 1)
+          if [ -z "$ICU_SUBDIR" ]; then
+            echo "Unable to locate ICU sources" >&2
+            exit 1
+          fi
+          ICU_SOURCE_SUBPATH="validation/icu/${ICU_SUBDIR}/icu4c/source"
+          docker run --rm -v "$PWD":/src -w /src/validation/app emscripten/emsdk:${{ matrix.EMSCRIPTEN_VERSION }} \
+            emcc main.c ./unoicu.a \
+              -I"/src/${ICU_SOURCE_SUBPATH}/common" \
+              -I"/src/${ICU_SOURCE_SUBPATH}/i18n" \
+              -sALLOW_MEMORY_GROWTH=1 \
+              -sEXIT_RUNTIME=1 \
+              -sASSERTIONS=1 \
+              -o unoicu_test.html
+
+      - name: Validate unoicu.a with Chromium
+        working-directory: validation/app
+        run: node run-test.js
 
   build_icudt:
     runs-on: ubuntu-latest
@@ -163,7 +243,7 @@ jobs:
           path: ./libicu_osx_universal/*
 
   package:
-    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_windows]
+    needs: [build_unoicu, validate_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_windows]
     runs-on: windows-latest
 
     steps:
@@ -207,11 +287,18 @@ jobs:
 
           mkdir -p ./nuget/uno.icu-wasm/buildTransitive/native/unoicu.a
           pushd merged-artifacts
+          shopt -s nullglob
           for dir in unoicu-*; do
-            new_name="${dir#unoicu-}"
-            mkdir -p ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/"$new_name"/st
-            cp -r "$dir"/unoicu.a ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/"$new_name"/st/unoicu.a
+            SRC_BASE="$dir/unoicu.a"
+            if [ ! -d "$SRC_BASE" ]; then
+              SRC_BASE="$dir"
+            fi
+
+            find "$SRC_BASE" -mindepth 1 -maxdepth 1 -type d ! -name '*nosimd*' -print0 | while IFS= read -r -d '' version_dir; do
+              cp -R "$version_dir" ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a/
+            done
           done
+          find ../nuget/uno.icu-wasm/buildTransitive/native/unoicu.a -type d -name '*nosimd*' -exec rm -rf {} +
           popd
 
       - name: List files
