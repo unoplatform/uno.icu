@@ -2,11 +2,14 @@
 #include <unicode/ustring.h>
 #include <unicode/utypes.h>
 #include <emscripten/emscripten.h>
+#include <emscripten/em_js.h>
+
+EM_JS(void, unoicu_set_result, (int ok, int status), {
+    Module.unoicuResult = { ok: Boolean(ok), status: status };
+});
 
 static void report_result(UBool ok, int32_t status) {
-    EM_ASM({
-        Module.unoicuResult = { ok: Boolean($0), status: $1 };
-    }, ok ? 1 : 0, status);
+    unoicu_set_result(ok ? 1 : 0, status);
 }
 
 int main(void) {
