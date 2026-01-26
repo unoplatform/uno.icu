@@ -76,6 +76,22 @@ const char* uno_u_errorName(UErrorCode code) {
     return u_errorName(code);
 }
 
+UBreakIterator* uno_ubrk_open(UBreakIteratorType type, const char *locale, const UChar *text, int32_t textLength, UErrorCode *status) {
+    return ubrk_open(type, locale, text, textLength, status);
+}
+
+void uno_ubrk_close(UBreakIterator *bi) {
+    ubrk_close(bi);
+}
+
+int32_t uno_ubrk_first(UBreakIterator *bi) {
+    return ubrk_first(bi);
+}
+
+int32_t uno_ubrk_next(UBreakIterator *bi) {
+    return ubrk_next(bi);
+}
+
 // TEST CODE: DO NOT COMPILE THIS IN
 // int main(int argc, char **argv) {
 //     UChar* text = u"Hello ragaa";
