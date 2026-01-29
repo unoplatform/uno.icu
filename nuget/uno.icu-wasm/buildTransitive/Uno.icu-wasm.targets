@@ -1,14 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-    <PropertyGroup>
-        <_UnoIcuNativeBinaryType Condition="'$(WasmEnableThreads)' == 'True'">mt</_UnoIcuNativeBinaryType>
-        <_UnoIcuNativeBinaryType Condition="'$(WasmEnableThreads)' != 'True'">st</_UnoIcuNativeBinaryType>
-        <_UnoIcuNativeBinaryType Condition="'$(WasmEnableSIMD)' == 'True'">$(_UnoIcuNativeBinaryType),simd</_UnoIcuNativeBinaryType>
-        <_UnoIcuNativeBinaryType Condition="'$(WasmEnableSIMD)' != 'True'">$(_UnoIcuNativeBinaryType)</_UnoIcuNativeBinaryType>
-    </PropertyGroup>
     <ItemGroup Condition="'$(IsUnoHead)' == 'True'">
-        <NativeFileReference Include="$(MSBuildThisFileDirectory)/native/unoicu.a/3.1.56/$(_UnoIcuNativeBinaryType)/unoicu.a" />
+        <WasmShellNativeFileReference Include="$(MSBuildThisFileDirectory)/native/unoicu.a/3.1.56/$(_UnoIcuNativeBinaryType)/unoicu.a" />
     </ItemGroup>
 
     <Import Project="$(MSBuildThisFileDirectory)Uno.icu.Common.targets" />
