@@ -2,7 +2,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
     <ItemGroup Condition="'$(IsUnoHead)' == 'True'">
-        <WasmShellNativeFileReference Include="$(MSBuildThisFileDirectory)/native/unoicu.a/3.1.56/$(_UnoIcuNativeBinaryType)/unoicu.a" />
+        <WasmShellNativeFileReference Include="$(MSBuildThisFileDirectory)**/unoicu.a" />
     </ItemGroup>
 
 </Project>
