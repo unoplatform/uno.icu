@@ -5,6 +5,7 @@
 #include <unicode/udata.h>
 #include <unicode/ubrk.h>
 #include <unicode/ubidi.h>
+#include <unicode/uscript.h>
 #include <unicode/uversion.h>
 
 int loaded_icu_data = false;
@@ -90,6 +91,26 @@ int32_t uno_ubrk_first(UBreakIterator *bi) {
 
 int32_t uno_ubrk_next(UBreakIterator *bi) {
     return ubrk_next(bi);
+}
+
+void uno_ubidi_setLine(const UBiDi *pParaBiDi, int32_t start, int32_t limit, UBiDi *pLineBiDi, UErrorCode *pErrorCode) {
+    ubidi_setLine(pParaBiDi, start, limit, pLineBiDi, pErrorCode);
+}
+
+const UBiDiLevel* uno_ubidi_getLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+    return ubidi_getLevels(pBiDi, pErrorCode);
+}
+
+UBiDiLevel uno_ubidi_getParaLevel(const UBiDi *pBiDi) {
+    return ubidi_getParaLevel(pBiDi);
+}
+
+void uno_ubidi_getLogicalMap(UBiDi *pBiDi, int32_t *logicalMap, UErrorCode *pErrorCode) {
+    ubidi_getLogicalMap(pBiDi, logicalMap, pErrorCode);
+}
+
+UScriptCode uno_uscript_getScript(UChar32 codepoint, UErrorCode *err) {
+    return uscript_getScript(codepoint, err);
 }
 
 // TEST CODE: DO NOT COMPILE THIS IN
