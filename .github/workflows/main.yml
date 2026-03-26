@@ -82,10 +82,23 @@ jobs:
           curl -L -o icu.zip $env:ICU_SOURCE_ZIP_URL
           Expand-Archive icu.zip -DestinationPath icu
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
+
+          # Create a props file that forces static CRT (/MT) to eliminate msvcp/vcruntime DLL dependencies
+          $staticCrtProps = "$PWD/static_crt.props"
+          @"
+          <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+            <ItemDefinitionGroup>
+              <ClCompile>
+                <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+              </ClCompile>
+            </ItemDefinitionGroup>
+          </Project>
+          "@ | Set-Content $staticCrtProps
+
           Push-Location icu/*/icu4c/source
           
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;stubdata" /m
-          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:RuntimeLibrary=MultiThreaded /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;stubdata" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/p:ForceImportAfterCppTargets=$staticCrtProps" "/t:common;stubdata" /m
+          msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/p:ForceImportAfterCppTargets=$staticCrtProps" "/t:common;stubdata" /m
     
           Pop-Location
           New-Item -ItemType Directory -Path libx64
