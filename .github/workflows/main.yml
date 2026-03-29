@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/host-cleanup-linux
+
       - name: Build unoicu.a
         run: |
           pushd src/unoicu
@@ -55,7 +58,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      
+
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/host-cleanup-linux
+
       - name: Build icudt.dat
         run: |
           pushd src/cldr_data
