@@ -2,19 +2,30 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
     <ItemGroup Condition="'$(IsUnoHead)' == 'True'">
-        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicuuc.a">
+        <!-- iOS device -->
+        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator')) and !$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)ios/libicuuc.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
-        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a">
+        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator')) and !$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
+        <!-- iOS simulator -->
         <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicuuc.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
         <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <!-- Mac Catalyst (macabi) -->
+        <NativeReference Condition="$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)maccatalyst/libicuuc.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <NativeReference Condition="$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)maccatalyst/libicudata.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>

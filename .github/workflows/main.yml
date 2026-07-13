@@ -186,7 +186,7 @@ jobs:
           path: ./libicu_osx_universal/*
 
   package:
-    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_windows]
+    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_maccatalyst_universal, build_libicu_windows]
     runs-on: windows-latest
 
     steps:
@@ -198,7 +198,7 @@ jobs:
         uses: actions/upload-artifact/merge@v4
         with:
           name: merged-artifacts
-          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,libicu-windows-*,unoicu-*,icudt.dat}'
+          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,libicu_maccatalyst_universal,libicu-windows-*,unoicu-*,icudt.dat}'
           separate-directories: true
 
       - name: Download merged artifacts
@@ -220,6 +220,8 @@ jobs:
           mv merged-artifacts/libicu_iossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/iossim
           mkdir nuget/uno.icu-ios/ios
           mv merged-artifacts/libicu_ios/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/ios
+          mkdir nuget/uno.icu-ios/maccatalyst
+          mv merged-artifacts/libicu_maccatalyst_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/maccatalyst
 
           mkdir -p nuget/uno.icu-win/libicu/x64
           mv merged-artifacts/libicu-windows-x64/* ./nuget/uno.icu-win/libicu/x64
@@ -493,3 +495,72 @@ jobs:
         with:
           name: libicu_iossim_universal
           path: ./libicu_iossim_universal/*
+
+  build_libicu_maccatalyst:
+    strategy:
+      matrix:
+        arch: [ 'arm64', 'x86_64' ]
+    runs-on: 'macos-15' # arm64
+    needs: build_libicu_osx
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-osx-arm64-build
+          path: ./osx-arm64-build
+
+      - name: Build ICU
+        run: |
+          # Mac Catalyst (macabi) has no dedicated SDK directory: it compiles against the macOS SDK
+          # with an -ios<version>-macabi target triple. 15.0 matches Uno's own Mac Catalyst minimum
+          # (SupportedOSPlatformVersion in src/Uno.CrossTargetting.targets) and the
+          # net10.0-maccatalyst workload's assumed default.
+          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          mkdir icu
+          unzip -d icu icu.zip
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
+          CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
+          chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
+          pushd icu/$(ls icu)/icu4c/source
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-target ${{ matrix.arch }}-apple-ios15.0-macabi -isysroot $(xcode-select -print-path)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" CXXFLAGS="-target ${{ matrix.arch }}-apple-ios15.0-macabi -isysroot $(xcode-select -print-path)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -c -stdlib=libc++ --std=c++17" LDFLAGS="-target ${{ matrix.arch }}-apple-ios15.0-macabi -stdlib=libc++ -lstdc++"
+          make -j $(sysctl -n hw.physicalcpu)
+          popd
+          mkdir lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu-maccatalyst-${{ matrix.arch }}
+          path: ./lib
+
+  build_libicu_maccatalyst_universal:
+    needs: [build_libicu_maccatalyst]
+    runs-on: 'macos-15'
+    steps:
+      - name: Merge libicu binaries
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: libicu-maccatalyst-merged
+          pattern: 'libicu-maccatalyst-*'
+          separate-directories: true
+
+      - name: Download merged libicu binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-maccatalyst-merged
+          path: ./libicu-maccatalyst-merged
+
+      - name: Create universal libicu binaries
+        run: |
+          mkdir libicu_maccatalyst_universal
+          lipo -create libicu-maccatalyst-merged/**/libicuuc.a -output libicu_maccatalyst_universal/libicuuc.a
+          lipo -create libicu-maccatalyst-merged/**/libicudata.a -output libicu_maccatalyst_universal/libicudata.a
+
+      - name: Upload universal libicu binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu_maccatalyst_universal
+          path: ./libicu_maccatalyst_universal/*
