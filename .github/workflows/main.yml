@@ -22,7 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        EMSCRIPTEN_VERSION: [ '3.1.56' ]
+        # Build one set of archives per emscripten version consumed by a supported .NET runtime.
+        # The Uno.Wasm.Bootstrap native-file selector picks the archive matching the consumer's
+        # emscripten version (see nuget/uno.icu-wasm/buildTransitive/Uno.icu-wasm.targets).
+        #   3.1.56 -> .NET 9 / .NET 10
+        #   5.0.6  -> .NET 11 (preview 6+)
+        EMSCRIPTEN_VERSION: [ '3.1.56', '5.0.6' ]
         multithreaded: [true, false]
         simd: [true, false]
     steps:
