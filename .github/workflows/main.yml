@@ -191,7 +191,7 @@ jobs:
           path: ./libicu_osx_universal/*
 
   package:
-    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_windows]
+    needs: [build_unoicu, build_icudt, build_libicu_osx_universal, build_libicu_iossim_universal, build_libicu_ios, build_libicu_tvossim_universal, build_libicu_tvos, build_libicu_windows]
     runs-on: windows-latest
 
     steps:
@@ -203,7 +203,7 @@ jobs:
         uses: actions/upload-artifact/merge@v4
         with:
           name: merged-artifacts
-          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,libicu-windows-*,unoicu-*,icudt.dat}'
+          pattern: '{libicu_osx_universal,libicu_iossim_universal,libicu_ios,libicu_tvossim_universal,libicu_tvos,libicu-windows-*,unoicu-*,icudt.dat}'
           separate-directories: true
 
       - name: Download merged artifacts
@@ -225,6 +225,11 @@ jobs:
           mv merged-artifacts/libicu_iossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/iossim
           mkdir nuget/uno.icu-ios/ios
           mv merged-artifacts/libicu_ios/{libicuuc,libicudata}.a ./nuget/uno.icu-ios/ios
+
+          mkdir nuget/uno.icu-tvos/tvossim
+          mv merged-artifacts/libicu_tvossim_universal/{libicuuc,libicudata}.a ./nuget/uno.icu-tvos/tvossim
+          mkdir nuget/uno.icu-tvos/tvos
+          mv merged-artifacts/libicu_tvos/{libicuuc,libicudata}.a ./nuget/uno.icu-tvos/tvos
 
           mkdir -p nuget/uno.icu-win/libicu/x64
           mv merged-artifacts/libicu-windows-x64/* ./nuget/uno.icu-win/libicu/x64
@@ -270,6 +275,7 @@ jobs:
           .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-ios/uno.icu-ios.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
+          .\nuget.exe pack uno.icu-tvos/uno.icu-tvos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           .\nuget.exe pack uno.icu-win/uno.icu-win.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
           popd
 
@@ -498,3 +504,102 @@ jobs:
         with:
           name: libicu_iossim_universal
           path: ./libicu_iossim_universal/*
+  build_libicu_tvossim:
+    strategy:
+      matrix:
+        arch: [ 'arm64', 'x86_64' ]
+    runs-on: 'macos-15' # arm64
+    needs: build_libicu_osx
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-osx-arm64-build
+          path: ./osx-arm64-build
+
+      - name: Build ICU
+        run: |
+          # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
+          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          mkdir icu
+          unzip -d icu icu.zip
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
+          CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
+          chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
+          pushd icu/$(ls icu)/icu4c/source
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=${{ matrix.arch }}-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/AppleTVSimulator.platform/Developer/SDKs/AppleTVSimulator.sdk -mtvos-simulator-version-min=13.4" CXXFLAGS="-arch ${{ matrix.arch }} -isysroot $(xcode-select -print-path)/Platforms/AppleTVSimulator.platform/Developer/SDKs/AppleTVSimulator.sdk -mtvos-simulator-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          make -j $(sysctl -n hw.physicalcpu)
+          popd
+          mkdir lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu-tvossim-${{ matrix.arch }}
+          path: ./lib
+
+  build_libicu_tvos:
+    runs-on: 'macos-15' # arm64
+    needs: build_libicu_osx
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-osx-arm64-build
+          path: ./osx-arm64-build
+
+      - name: Build ICU
+        run: |
+          # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
+          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          mkdir icu
+          unzip -d icu icu.zip
+          export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
+          CROSS_BUILD_DIR="$(pwd)/osx-arm64-build"
+          chmod +x $CROSS_BUILD_DIR/source/bin/* # the exec bit is lost during github actions uploading and downloading
+          pushd icu/$(ls icu)/icu4c/source
+          ./configure --enable-static --disable-shared --with-data-packaging=static --disable-tools --disable-extras --disable-tests --disable-samples --disable-dyload --host=arm-apple-darwin --build=arm-apple --with-cross-build="$CROSS_BUILD_DIR"/source CFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS.sdk -mtvos-version-min=13.4" CXXFLAGS="-arch arm64 -isysroot $(xcode-select -print-path)/Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS.sdk -mtvos-version-min=13.4 -c -stdlib=libc++ --std=c++17" LDFLAGS="-stdlib=libc++ -lstdc++"
+          make -j $(sysctl -n hw.physicalcpu)
+          popd
+          mkdir lib
+          cp icu/$(ls icu)/icu4c/source/lib/libicuuc.a icu/$(ls icu)/icu4c/source/lib/libicudata.a lib
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu_tvos
+          path: ./lib
+
+  build_libicu_tvossim_universal:
+    needs: [build_libicu_tvossim]
+    runs-on: 'macos-15'
+    steps:
+      - name: Merge libicu binaries
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: libicu-tvossim-merged
+          pattern: 'libicu-tvossim-*'
+          separate-directories: true
+
+      - name: Download merged libicu binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: libicu-tvossim-merged
+          path: ./libicu-tvossim-merged
+
+      - name: Create universal libicu binaries
+        run: |
+          mkdir libicu_tvossim_universal
+          lipo -create libicu-tvossim-merged/**/libicuuc.a -output libicu_tvossim_universal/libicuuc.a
+          lipo -create libicu-tvossim-merged/**/libicudata.a -output libicu_tvossim_universal/libicudata.a
+
+      - name: Upload universal libicu binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libicu_tvossim_universal
+          path: ./libicu_tvossim_universal/*

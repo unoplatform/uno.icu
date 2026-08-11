@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+    <metadata minClientVersion="5.0.0">
+        <id>Uno.icu-tvos</id>
+        <version>0.0.1</version>
+        <title>Uno ICU for tvOS</title>
+        <authors>Uno Platform</authors>
+        <owners>unoplatform</owners>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <projectUrl>https://github.com/unoplatform/uno.icu-wasm</projectUrl>
+        <iconUrl>https://nv-assets.azurewebsites.net/logos/uno.png</iconUrl>
+        <description>The International Components for Unicode for tvOS</description>
+        <copyright>Copyright (C) 2015-2025 Uno Platform inc. - all rights reserved</copyright>
+        <repository type="git" url="https://github.com/unoplatform/Uno.icu-wasm.git" />
+    </metadata>
+    <files>
+        <file src="buildTransitive\Uno.icu-tvos.targets" target="buildTransitive" />
+        <file src="tvos\libicuuc.a" target="buildTransitive\tvos" />
+        <file src="tvos\libicudata.a" target="buildTransitive\tvos" />
+        <file src="tvossim\libicuuc.a" target="buildTransitive\tvossim" />
+        <file src="tvossim\libicudata.a" target="buildTransitive\tvossim" />
+    </files>
+</package>
