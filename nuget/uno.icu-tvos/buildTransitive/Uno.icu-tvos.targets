@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+    <!--
+    tvOS RIDs are tvos-arm64 (device) and tvossimulator-arm64 / tvossimulator-x64
+    (simulator). Note that "tvos" is a prefix of "tvossimulator", so the device
+    condition must exclude the simulator explicitly rather than relying on
+    StartsWith('tvos') alone.
+
+    Both branches also require a tvOS RID to be present: when RuntimeIdentifier is
+    empty there is nothing to link against, and injecting device archives into a
+    RID-less build produces a confusing architecture mismatch instead of a clear
+    "no RID" failure.
+    -->
+    <ItemGroup Condition="'$(IsUnoHead)' == 'True' and $(RuntimeIdentifier.StartsWith('tvos')) and !$(RuntimeIdentifier.StartsWith('tvossimulator'))">
+        <NativeReference Include="$(MSBuildThisFileDirectory)tvos/libicuuc.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <NativeReference Include="$(MSBuildThisFileDirectory)tvos/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(IsUnoHead)' == 'True' and $(RuntimeIdentifier.StartsWith('tvossimulator'))">
+        <NativeReference Include="$(MSBuildThisFileDirectory)tvossim/libicuuc.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+        <NativeReference Include="$(MSBuildThisFileDirectory)tvossim/libicudata.a">
+            <Kind>Static</Kind>
+            <ForceLoad>True</ForceLoad>
+        </NativeReference>
+    </ItemGroup>
+
+</Project>
