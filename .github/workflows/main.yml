@@ -16,6 +16,10 @@ on:
   
 env:
   ICU_SOURCE_ZIP_URL: https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip
+  # Deployment target stamped into the Uno.icu-macos dylibs. Without an explicit value clang
+  # inherits the runner's OS version (macos-15 -> minos 15.0). 10.15 matches libUnoNativeMac in
+  # Uno.WinUI.Runtime.Skia.MacOS; the arm64 slice is clamped to 11.0 by the toolchain.
+  ICU_MACOS_DEPLOYMENT_TARGET: '10.15'
 
 jobs:
   build_unoicu:
@@ -137,6 +141,7 @@ jobs:
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
+          export MACOSX_DEPLOYMENT_TARGET="$ICU_MACOS_DEPLOYMENT_TARGET"
           pushd icu/$(ls icu)/icu4c/source
           ./runConfigureICU macOS --with-data-packaging=archive
           make -j $(sysctl -n hw.physicalcpu)
@@ -183,7 +188,24 @@ jobs:
           mkdir libicu_osx_universal
           lipo -create libicu-osx-merged/**/libicuuc.dylib -output libicu_osx_universal/libicuuc.dylib
           lipo -create libicu-osx-merged/**/libicudata.dylib -output libicu_osx_universal/libicudata.dylib
-          
+
+      - name: Verify deployment target
+        run: |
+          set -euo pipefail
+          for lib in libicuuc libicudata; do
+            for arch in x86_64 arm64; do
+              expected="$ICU_MACOS_DEPLOYMENT_TARGET"
+              # arm64 macOS starts at 11.0, so the toolchain raises lower targets to it.
+              if [ "$arch" = "arm64" ]; then expected=$(printf '%s\n' 11.0 "$expected" | sort -V | tail -n 1); fi
+              minos=$(otool -arch "$arch" -l "libicu_osx_universal/$lib.dylib" | awk '/LC_BUILD_VERSION/{f=1} f && /minos/{print $2; exit}')
+              echo "$lib ($arch): minos $minos, expected $expected"
+              if [ "$minos" != "$expected" ]; then
+                echo "::error::$lib ($arch) is stamped for macOS $minos, expected $expected"
+                exit 1
+              fi
+            done
+          done
+
       - name: Upload universal libicu binaries
         uses: actions/upload-artifact@v4
         with:
