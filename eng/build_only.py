@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 import provenance as p
+import windows_toolchain as windows
 
 ROOT = p.ROOT
 OUT = ROOT / "artifacts/build-only"
@@ -279,23 +280,22 @@ def docker_build(build, archive):
 def windows_build(build, archive):
     if platform.system() != "Windows":
         raise ValueError("Windows hosted runner required")
-    vswhere = Path(os.environ["ProgramFiles(x86)"]) / "Microsoft Visual Studio/Installer/vswhere.exe"
-    args = [vswhere, "-latest", "-products", "*", "-version", "[17.0,18.0)", "-requires",
-            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-            "Microsoft.VisualStudio.Component.VC.Tools.ARM64"]
-    build.run(args + ["-format", "json", "-utf8"])
-    installation = build.run(args + ["-property", "installationPath", "-utf8"])
-    if not installation:
-        raise ValueError("Visual Studio 2022 x64/ARM64 C++ prerequisites are missing")
-    vs = Path(installation)
+    discovery = build.directory / "tools/vswhere"
+    build.run([sys.executable, ROOT / "eng/windows_toolchain.py",
+               "--arch", build.variant, "--output", discovery])
+    selection = json.loads((discovery / "selected.json").read_text(encoding="utf-8"))
+    vs = Path(selection["installation"]["installationPath"])
     msbuild = vs / "MSBuild/Current/Bin/amd64/MSBuild.exe"
     build.run([msbuild, "-version", "-nologo"])
     tools_version = (vs / "VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt").read_text().strip()
     tools = vs / "VC/Tools/MSVC" / tools_version / "bin/Hostx64" / build.variant
     p.write_new(build.directory / "tools/msvc.json", p.json_bytes({
-        "version": tools_version, "windowsSdk": "10.0.26100.0",
+        "version": tools_version, "windowsSdk": windows.SDK_VERSION,
+        "visualStudio": selection["installation"], "platformToolset": selection["platformToolset"],
         "hostArchitecture": "x64", "msbuildSha256": p.sha(msbuild.read_bytes()),
         "sha256": {name: p.sha((tools / name).read_bytes()) for name in ("cl.exe", "link.exe", "lib.exe")}}))
+    p.write_new(build.directory / "tools/windows-sdk.json", p.json_bytes(
+        windows.sdk_identity(windows.installed_sdk_root(), build.variant)))
     build.run(["pwsh", "-NoProfile", "-Command",
                "Expand-Archive -LiteralPath artifacts/icu-source.zip -DestinationPath artifacts/icu"])
     source = ROOT / "artifacts/icu" / f'icu-{p.load_lock()["commit"]}/icu4c/source'
@@ -311,6 +311,7 @@ def windows_build(build, archive):
     build.run([msbuild, "allinone/allinone.sln", "/p:Configuration=Release",
                f"/p:Platform={'ARM64' if build.variant == 'arm64' else 'x64'}",
                "/p:SkipUWP=true", "/p:WindowsTargetPlatformVersion=10.0.26100.0",
+               "/p:DefaultPlatformToolset=v143",
                f"/p:VCToolsVersion={tools_version}", "/p:PreferredToolArchitecture=x64",
                "/t:common;stubdata", "/m",
                f"/bl:{build.directory / 'logs/native.binlog'}"], cwd=source, env=env)

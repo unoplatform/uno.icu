@@ -5,6 +5,10 @@ build. `tests/raw_icu_smoke.py` consumes completed, owner-selected build-only
 artifacts. It does not discover/download artifacts or observe/dispatch runs.
 No workflow invokes it automatically in this change.
 
+Prepared invocations for the already verified producer set are recorded in
+[STAGE2-PROBE-CANDIDATES.md](STAGE2-PROBE-CANDIDATES.md). They are not execution
+evidence and do not supply the missing Windows native rows.
+
 Supported rows are `windows-x64`, `macos-x86_64`, and `macos-arm64`. macOS
 requires a matching **thin** library CPU type, not the universal artifact.
 The actual probe process must match the selected row. Windows ARM64 and WASM

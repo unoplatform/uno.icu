@@ -147,6 +147,12 @@ Use CI's exact NBGV version for an official build. Preparation fails on dirty
 or untracked build source and missing matrix members. It writes notices once;
 repeat a failed build in a fresh checkout instead of overwriting evidence.
 
+The isolated build-only Windows route uses `windows-2022` with stable VS2022,
+not the `windows-2025` alias that was observed selecting VS2026. It inventories
+all installed instances/components before selecting each architecture's
+requirements, and never installs missing tools. See the
+[concrete failure and prerequisite policy](docs/WINDOWS-PREREQUISITES.md).
+
 `tests/icu_smoke.py` loads the specified real Windows x64/macOS package in an
 isolated directory, verifies its expected package hash and ICU 77.1, checks all
 62 selected locales without fallback, exercises eight line-break cases,

@@ -78,7 +78,7 @@ registered main dispatch operation=build-only
      -> authorize + exact SHA + contracts -> source archive/notices/inventory
   -> data (Linux Docker) -------------------------------+
   -> wasm [3.1.56, 5.0.6] x [st, mt, st,simd, mt,simd] -+
-  -> windows [x64, arm64] (Windows 2025 C++) ------------+-> staging (all only)
+  -> windows [x64, arm64] (Windows 2022 / VS2022) -------+-> staging (all only)
   -> macos [x86_64, arm64] -> universal lipo ------------+
 ```
 
@@ -86,7 +86,10 @@ registered main dispatch operation=build-only
 architecture, and validate each output with `lipo -verify_arch`. Universal merge
 uses **only the two exact same-run manifests/paths**, not a wildcard including
 cross-build directories. Windows retains `common;stubdata`, static CRT, SDK
-10.0.26100.0 and x64/ARM64, with one matrix row at a time. WASM retains Emscripten
+10.0.26100.0 and x64/ARM64, with one matrix row at a time. The build-only runner
+uses `windows-2022` because the observed `windows-2025` label now selects VS2026,
+outside the pinned ICU VS2022/v143 path. See [Windows prerequisites](WINDOWS-PREREQUISITES.md).
+WASM retains Emscripten
 3.1.56 **and 5.0.6**, each with all four thread/SIMD variants (eight jobs),
 at most two concurrently.
 
@@ -160,9 +163,11 @@ as a hosted run. This implementation contains no local authorization shortcut.
   registry, Ubuntu apt repositories and GitHub/codeload reachable. No login or
   container registry push. A data/WASM job should reserve roughly 20 GiB disk
   and 8 GiB RAM (planning estimates, **not measured peak usage**).
-* Windows 2025 x64: Visual Studio 2022 v143 C++ tools for **both** x64 and ARM64,
-  MSBuild, SDK 10.0.26100.0, PowerShell 7, Python 3. Missing components fail;
-  the job does not install/repair toolchains.
+* Windows 2022 x64: stable Visual Studio 2022 v143, MSBuild, SDK 10.0.26100.0,
+  PowerShell 7 and Python 3. The x64 row requires its x86/x64 C++ component;
+  the ARM64 row requires its ARM64 C++ component. Both rows remain mandatory.
+  Unfiltered instance/component inventory is retained before version/component
+  selection. Missing components fail; the job does not install/repair toolchains.
 * macOS Intel and ARM64 hosted capacity, Xcode/command-line tools, `unzip`,
   Python 3, make, clang, `lipo`, `otool`. iOS/tvOS SDKs are not needed for this path.
 * Budget for 14 native/merge row jobs plus authorization and aggregate staging,
@@ -190,8 +195,10 @@ license/NOTICE use canonical Git blobs, independent of runner EOL conversion.
 Each artifact carries `LICENSE.txt`, `NOTICE.md`, and both separate license
 texts. The source artifact includes the full pinned `icu-source.zip`.
 
-Windows retains MSBuild binlog, exact selected MSVC tool version/hashes,
-SDK selection and before/after hashes for the static-CRT project patch (without
+Windows retains unfiltered and filtered `vswhere` inventories, the selected
+VS instance/version/component identities, MSBuild binlog, exact selected MSVC
+tool version/hashes, and selected SDK header/library hashes (not a full SDK
+inventory). It also records before/after hashes for the static-CRT project patch (without
 changing encoding or line endings of extracted sources). macOS retains clang hash/version, Xcode/SDK versions, configure
 logs, lipo and dependency reports. Docker retains the inspected immutable
 manifest, Docker/BuildKit versions, installed apt package versions, compiler

@@ -128,7 +128,8 @@ jobs:
   windows:
     needs: [authorize]
     if: ${{ inputs.target == 'all' || inputs.target == 'windows' }}
-    runs-on: windows-2025
+    # windows-2025 now selects VS2026 (18.x); pinned ICU uses the VS2022/v143 path.
+    runs-on: windows-2022
     timeout-minutes: 90
     strategy:
       fail-fast: false
