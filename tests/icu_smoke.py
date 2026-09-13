@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import sys
 import zipfile
 
@@ -33,6 +34,18 @@ def probe(package, directory, expected_sha256):
     with zipfile.ZipFile(package) as archive:
         for entry, name in native.items():
             p.write_new(directory / name, archive.read(entry))
+    return {"packageSha256": digest, **probe_directory(directory)}
+
+
+def probe_directory(directory, locales=None):
+    """Shared cases for the package control and a fresh raw-input worker process."""
+    if sys.platform not in ("win32", "darwin"):
+        raise ValueError("This probe supports Windows x64 or macOS only")
+    library = "icuuc77.dll" if sys.platform == "win32" else "libicuuc.dylib"
+    if locales is None:
+        locales = json.loads((p.ROOT / "src/cldr_data/filters.json").read_text())["localeFilter"]["whitelist"]
+    if len(locales) != 62 or len(set(locales)) != 62:
+        raise ValueError("Expected the complete 62-locale filter")
     search = os.add_dll_directory(str(directory)) if sys.platform == "win32" else None
     try:
         # ICU's macOS load command refers to libicudata.77.dylib. Load the
@@ -46,7 +59,8 @@ def probe(package, directory, expected_sha256):
             return fn
 
         status = c.c_int32()
-        data = c.create_string_buffer((directory / "icudt.dat").read_bytes())
+        data_bytes = (directory / "icudt.dat").read_bytes()
+        data = c.create_string_buffer(data_bytes)
         function("udata_setCommonData", None, c.c_void_p, c.POINTER(c.c_int32))(data, c.byref(status))
         if status.value > 0:
             raise ValueError(f"ICU data registration failed: {status.value}")
@@ -57,7 +71,6 @@ def probe(package, directory, expected_sha256):
         ures_open = function("ures_open", c.c_void_p, c.c_char_p, c.c_char_p, c.POINTER(c.c_int32))
         ures_close = function("ures_close", None, c.c_void_p)
         actual_locale = function("ures_getLocaleByType", c.c_char_p, c.c_void_p, c.c_int, c.POINTER(c.c_int32))
-        locales = json.loads((p.ROOT / "src/cldr_data/filters.json").read_text())["localeFilter"]["whitelist"]
         culture_results = []
         for locale in locales:
             status.value = 0
@@ -140,8 +153,8 @@ def probe(package, directory, expected_sha256):
         finally:
             bidi_close(bidi)
         return {
-            "packageSha256": digest, "nativeVersion": list(version),
-            "dataSha256": p.sha((directory / "icudt.dat").read_bytes()),
+            "nativeVersion": list(version),
+            "dataSha256": p.sha(data_bytes),
             "cultureCount": len(culture_results), "cultures": culture_results,
             "lineBreakCases": breaks, "scripts": scripts, "bidiDirection": direction,
             "coverage": "native data loading, exact locale resolution, line segmentation, script properties, mixed bidi",
@@ -152,13 +165,80 @@ def probe(package, directory, expected_sha256):
             search.close()
 
 
+def raw_file_names(row):
+    if row == "windows-x64":
+        libraries = ("icuuc77.dll", "icudt77.dll")
+    elif row in ("macos-x86_64", "macos-arm64"):
+        libraries = ("libicuuc.dylib", "libicudata.dylib")
+    else:
+        raise ValueError("Raw smoke supports Windows x64 and matching macOS thin rows only")
+    return {*libraries, "icudt.dat", "filters.json"}
+
+
+def require_raw_host(row):
+    machine = platform.machine().lower()
+    if c.sizeof(c.c_void_p) != 8:
+        raise ValueError("Raw smoke requires a 64-bit process")
+    if row == "windows-x64" and sys.platform == "win32" and machine in ("amd64", "x86_64"):
+        return
+    if sys.platform == "darwin" and row == "macos-" + machine and machine in ("x86_64", "arm64"):
+        return
+    raise ValueError("Probe process architecture does not match the selected native row")
+
+
+def check_raw_files(directory, row, expected):
+    if directory.is_symlink() or (hasattr(directory, "is_junction") and directory.is_junction()):
+        raise ValueError("Prepared runtime directory must not be a link/junction")
+    if set(expected) != raw_file_names(row):
+        raise ValueError("Incomplete or unexpected prepared raw input set")
+    paths = list(directory.iterdir())
+    if any(path.is_symlink() or not path.is_file() for path in paths):
+        raise ValueError("Prepared raw inputs must be ordinary files")
+    actual = {path.name: p.sha(path.read_bytes()) for path in paths}
+    if actual != expected:
+        raise ValueError("Prepared raw input hash mismatch")
+    return actual
+
+
+def probe_prepared(binding, expected_sha256):
+    """Worker interface: verifies prepared bytes, executes every case, rechecks bytes.
+
+    This result alone makes no assertion about build/source provenance. The
+    supervising raw adapter separately verifies and records those input bindings.
+    """
+    raw = binding.read_bytes()
+    if p.sha(raw) != expected_sha256:
+        raise ValueError("Prepared input binding SHA-256 mismatch")
+    prepared = json.loads(raw)
+    if prepared["schemaVersion"] != 1:
+        raise ValueError("Unsupported prepared input schema")
+    row = prepared["row"]
+    require_raw_host(row)
+    directory = binding.parent / "runtime"
+    check_raw_files(directory, row, prepared["files"])
+    locales = json.loads((directory / "filters.json").read_text())["localeFilter"]["whitelist"]
+    result = probe_directory(directory, locales)
+    files = check_raw_files(directory, row, prepared["files"])
+    return {**result, "row": row, "preparedInputsSha256": expected_sha256,
+            "inputSha256": files, "sourceProvenanceVerifiedByWorker": False}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--package", type=Path, required=True)
-    parser.add_argument("--work-directory", type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--package", type=Path)
+    inputs.add_argument("--raw-inputs", type=Path)
+    parser.add_argument("--work-directory", type=Path)
     parser.add_argument("--expected-sha256", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    result = probe(args.package.resolve(), args.work_directory.resolve(), args.expected_sha256)
+    if args.package:
+        if args.work_directory is None:
+            parser.error("--package requires --work-directory")
+        result = probe(args.package.resolve(), args.work_directory.resolve(), args.expected_sha256)
+    else:
+        if args.work_directory is not None:
+            parser.error("--raw-inputs uses its sibling runtime directory, not --work-directory")
+        result = probe_prepared(args.raw_inputs.resolve(), args.expected_sha256)
     p.write_new(args.output, p.json_bytes(result))
     print(json.dumps(result, indent=2, ensure_ascii=False))

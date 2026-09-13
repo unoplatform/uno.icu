@@ -98,6 +98,10 @@ pack validation or treat an unverified Apple static row as passed.
 The build-only manifests remain `runtimeTested=false`: this is stage-one native
 construction. Same-run native/data smoke probes are a separate, explicitly
 documented next stage, not implicitly covered by a successful build.
+[`tests/raw_icu_smoke.py`](docs/RAW-SMOKE.md) can bind the completed source/data/
+Windows-x64 or matching macOS-thin row artifacts and run the existing 62-locale,
+line-break, script and bidi assertions in a fresh worker. It does not download
+artifacts, change the build workflow, create packages, sign, or publish.
 
 For example, the Linux filtered-data job is:
 

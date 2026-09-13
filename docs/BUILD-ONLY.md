@@ -235,10 +235,11 @@ The next independently reported probe stage must:
 3. Record separate probe JSON identifying the input bundle manifests and actual
    library/data hashes. Preserve, rather than rewrite, the build manifests.
 
-The existing smoke entry currently takes a **nupkg**, not raw row artifacts.
-A raw-library/data adapter reusing those assertions is a follow-up; it is **not
-implemented or run by this dispatcher fix**. Do not fabricate packages, use old
-payloads, bypass the five-package pack guard, or claim smoke success from
+The [raw-library/data adapter](RAW-SMOKE.md) now reuses those assertions through
+a fresh isolated worker. It is **not wired into these workflows and has not
+executed newly built native bytes merely because its unit contracts pass**.
+The existing nupkg probe remains supported separately. Do not fabricate packages,
+use old payloads, bypass the five-package pack guard, or claim smoke success from
 `runtimeTested=false`. Parent-owned native UI/physical AT checks follow coherent
 artifacts and are separate again. Self-reported inventories do not close
 signature, protected-attestation or historical proof requirements.
