@@ -391,13 +391,16 @@ def build_apple(host_source, archive, host_bundle):
     if host_source.resolve() != expected_host.resolve():
         raise ValueError("Use this job's newly built ICU ARM64 host tree")
     host_manifest = verify_bundle(host_bundle, "macos", "arm64")
-    host = apple.host_identity(host_source)
+    filter_data = (ROOT / "src/cldr_data/filters.json").read_bytes()
+    host = apple.host_identity(host_source, filter_data)
     build = Build("apple")
     build.source()
     p.write_new(build.directory / "host-identity.json", p.json_bytes({
         "hostArtifactSha256": host_manifest, "hostSource": str(host_source), "hostIdentity": host,
         "runtimeTested": False, "authenticatedAttestation": False,
     }))
+    for name in apple.HOST_CONFIGS:
+        copy_new(host_source / name, build.directory / "host-config" / name)
     build.run(["xcodebuild", "-version"])
     workers = build.run(["sysctl", "-n", "hw.physicalcpu"])
     sdk_records, variant_records = {}, []
@@ -410,7 +413,7 @@ def build_apple(host_source, archive, host_bundle):
             if not sdk_path.is_dir() or not settings.is_file():
                 raise ValueError("Required Apple SDK/settings are missing")
             tools = {}
-            for tool in ("clang", "clang++", "ar", "lipo"):
+            for tool in ("clang", "clang++", "ar", "ranlib", "lipo"):
                 path = Path(build.run(["xcrun", "--sdk", variant.sdk, "--find", tool]))
                 tools[tool] = {"path": str(path), "sha256": p.sha(path.read_bytes())}
             build.run([tools["clang"]["path"], "--version"])
@@ -426,8 +429,8 @@ def build_apple(host_source, archive, host_bundle):
             raise FileExistsError("Apple variants require fresh isolated source/intermediate trees")
         build.run(["unzip", "-q", archive, "-d", extraction])
         source = extraction / f'icu-{p.load_lock()["commit"]}/icu4c/source'
-        compiler_env = {"CC": sdk["tools"]["clang"]["path"], "CXX": sdk["tools"]["clang++"]["path"]}
-        env = {**os.environ, **compiler_env, "ICU_DATA_FILTER_FILE": str(ROOT / "src/cldr_data/filters.json")}
+        compiler_env = apple.compiler_environment(sdk)
+        env = apple.variant_environment(os.environ, sdk, ROOT / "src/cldr_data/filters.json")
         command = apple.configure_command(variant, Path(sdk["path"]), host_source)
         directory = build.directory / "variants" / variant.name
         p.write_new(directory / "recipe.json", p.json_bytes({
@@ -436,13 +439,40 @@ def build_apple(host_source, archive, host_bundle):
             "sourceArchiveSha256": p.load_lock()["archiveSha256"],
             "filterSha256": p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()),
         }))
+        root_probe = directory / "root-tool-selection.mk"
+        data_probe = directory / "data-tool-selection.mk"
+        p.write_new(root_probe, apple.tool_probe_makefile(True).encode("utf-8"))
+        p.write_new(data_probe, apple.tool_probe_makefile(False).encode("utf-8"))
+        root_probe_command = ["make", "--no-print-directory", "-s", "-f", root_probe, "__uno_icu_tool_identity"]
+        data_probe_command = ["make", "--no-print-directory", "-s", "-C", "data", "-f", "Makefile",
+                              "-f", data_probe, "__uno_icu_tool_identity"]
         try:
             build.run(command, cwd=source, env=env)
+            apple.reject_local_overrides(source)
+            # Generate/evaluate the actual configuration before archive creation.
+            build.run(["make", "--no-print-directory", "-C", "data", "icupkg.inc"], cwd=source, env=env)
+            root_values = build.run(root_probe_command, cwd=source, env=env)
+            data_values = build.run(data_probe_command, cwd=source, env=env)
+            p.write_new(directory / "make-evaluated-before.txt", root_values.encode("utf-8"))
+            p.write_new(directory / "data-make-evaluated-before.txt", data_values.encode("utf-8"))
+            configuration = apple.verify_tool_configuration(source, sdk, str(host_source), root_values, data_values)
+            for name in apple.CONFIGURATION_FILES:
+                copy_new(source / name, directory / "configuration" / name)
+            p.write_new(directory / "tool-configuration.json", p.json_bytes(configuration))
             build.run(["make", "-j", workers], cwd=source, env=env)
+            root_after = build.run(root_probe_command, cwd=source, env=env)
+            data_after = build.run(data_probe_command, cwd=source, env=env)
+            p.write_new(directory / "make-evaluated-after.txt", root_after.encode("utf-8"))
+            p.write_new(directory / "data-make-evaluated-after.txt", data_after.encode("utf-8"))
+            if apple.verify_tool_configuration(source, sdk, str(host_source), root_after, data_after) != configuration:
+                raise ValueError("Archive tool/configuration selection changed during the build")
         finally:
             for name in ("config.log", "config.status"):
                 if (source / name).is_file():
                     copy_new(source / name, directory / name)
+            for name in apple.CONFIGURATION_FILES:
+                if (source / name).is_file():
+                    copy_new(source / name, directory / "configuration-final" / name)
         archive_records = {}
         for library in ("libicuuc.a", "libicudata.a"):
             binary = source / "lib" / library
@@ -455,11 +485,12 @@ def build_apple(host_source, archive, host_bundle):
             "name": variant.name, "target": variant.target, "architecture": variant.arch,
             "platform": apple.PLATFORMS[variant.target], "sdk": variant.sdk, "recipe": command,
             "compilerEnvironment": compiler_env,
+            "toolConfiguration": configuration,
             "sourceArchiveSha256": p.load_lock()["archiveSha256"],
             "filterSha256": p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()),
             "archives": archive_records,
         })
-        if apple.host_identity(host_source) != host:
+        if apple.host_identity(host_source, filter_data) != host:
             raise ValueError("Cross-build altered the native host tool inputs")
         # Only this successfully archived variant's fresh tree is removed.
         # Failures leave their working tree and retained command/config logs.

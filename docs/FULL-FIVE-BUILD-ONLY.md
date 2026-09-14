@@ -32,9 +32,10 @@ The additional work is performed in the existing **native ARM64 `macos-15`
 job**, after its normal ICU host build finishes:
 
 1. Verify that job's same-source/run/attempt ARM64 native manifest and the actual
-   newly built host tree. Require `config/icucross.mk`, configuration logs,
-   ARM64 macOS `genrb`, `genccode`, `gencmn`, `icupkg`, `pkgdata` executables and
-   host libraries. Hash the files and inspect their Mach-O CPU/platform/type.
+   newly built host tree. Require both `config/icucross.mk` and
+   `config/icucross.inc`, their generating configuration, all selected host
+   tools and their ICU dylib dependencies (details below). Hash the files and
+   inspect executable/library Mach-O CPU/platform/type.
 2. Execute six isolated cross-builds: iOS device ARM64, iOS simulator ARM64 and
    x86_64, tvOS device ARM64, tvOS simulator ARM64 and x86_64.
 3. Merge each simulator's two CPU archives with `lipo`, producing two library
@@ -56,12 +57,56 @@ There is no local SDK installation or local heavy build in this implementation.
 
 Required SDK selectors are `iphoneos`, `iphonesimulator`, `appletvos` and
 `appletvsimulator`. SDK paths/version/build IDs, settings hashes and selected
-clang/clang++/ar/lipo paths/hashes are retained. `CC`/`CXX` use those recorded
-compiler paths. Existing configure options are preserved: static libraries/data,
+clang/clang++/ar/ranlib/lipo paths/hashes are retained. `CC`, `CXX`, `AR` and
+`RANLIB` explicitly select those recorded paths, overriding inherited values
+without changing machine or process `PATH`. Existing configure options are
+preserved: static libraries/data,
 disabled shared/tools/extras/tests/samples/dyload, existing host/build triplets,
 `-stdlib=libc++`, C++17 and the platform-specific **13.4 minimum** flags.
 Actual SDK availability and recipe execution remain unverified until an approved
 hosted run. There are no default-toolchain or missing-SDK success fallbacks.
+
+## Consumed host inputs and archive-tool selection
+
+The locked ICU 77.1 `data/BUILDRULES.py` and current additive filter select
+`gencnval` (converter aliases), `genbrk` (break rules), `gendict` (dictionaries),
+`genrb` (resource trees) and `icupkg` (prebuilt data). The host receipt also
+requires `pkgdata`, `genccode` and `gencmn` as the normal packaging tool set.
+A changed, unsupported filter requires closure review rather than silently
+assuming these eight executables suffice.
+
+Both cross configs are consumed by `icudefs.mk`; the snapshot includes them,
+`icudefs.mk`, root `Makefile`, `config/mh-darwin`, `config.status` and `config.log`.
+These configuration bytes are retained and checked against their receipt.
+`libicuuc`, `libicui18n`, **`libicutu`** and stub `libicudata` dylibs are mandatory.
+All dylib files in the actual host search directories are hashed/type-checked;
+direct and transitive ICU load-command dependencies, including versioned names,
+must resolve there. Normal generators search `lib`, `stubdata`, `tools/ctestfw`;
+`pkgdata` searches `stubdata`, `tools/ctestfw`, `lib`. Missing required inputs,
+external file links, unresolved/non-system non-ICU dependencies, or local
+makefile overrides fail preflight. System-library dependency names are recorded,
+not presented as a complete OS-content proof. The host snapshot must remain
+unchanged after each cross-build.
+
+For each cross variant, inherited archiver/indexer values, archive flags,
+make overrides and host-loader overrides cannot change the selected tool set.
+An empty incoming `ARFLAGS` preserves ICU's normal generated `r` plus Darwin
+`-c` flags. After configure, the builder generates the actual `data/icupkg.inc`,
+then uses metadata-only GNU make targets to inspect the effective root and data
+tool variables without executing an archiver. It reconciles `icudefs.mk`,
+evaluated make variables and pkgdata's actual `AR`/`ARFLAGS`/`RANLIB`/`COMPILE`
+configuration with the recorded SDK tools. Host paths, invocation search order,
+pkgdata's `-O` configuration and generated data-rule tool names are also checked.
+Before/after generated makefiles, configuration hashes and evaluations are
+retained; selection or configuration changes fail receipt verification.
+
+Command paths are shell-quoted and parsed as single selected executables.
+ICU's pkgdata template can remove quoting from a space-containing archiver path;
+an ambiguous generated command is rejected, not silently split or substituted.
+These checks are locked-source reasoning and synthetic configuration tests
+until an approved Apple run executes the real generated-make/configure path.
+No claim of byte reproducibility, protected attestation or native acceptance
+follows from the receipts alone.
 
 ## Platform-aware archive acceptance
 

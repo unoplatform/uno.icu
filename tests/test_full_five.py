@@ -2,6 +2,7 @@
 import importlib
 import itertools
 import json
+import shlex
 from pathlib import Path
 import struct
 import sys
@@ -52,24 +53,28 @@ def universal(platform_id, payloads=None):
 
 
 def apple_fixture(directory, host_hash, lock, filter_hash):
+    from test_apple_tool_binding import configuration_fixture
     a = apple()
     host_binary = bytearray(object_file(1))
     struct.pack_into("<I", host_binary, 12, 2)
     identity = a.macho_identity(bytes(host_binary), 1, "arm64", minimum=None, file_type=2)
-    host_files = {"config/icucross.mk": p.sha(b"fixture host config")}
+    host_files = {name: p.sha(b"fixture host config") for name in a.HOST_CONFIGS}
+    for name in a.HOST_CONFIGS:
+        p.write_new(directory / "host-config" / name, b"fixture host config")
     tools = {}
-    for name in ("genrb", "genccode", "gencmn", "icupkg", "pkgdata"):
+    for name in a.HOST_TOOLS:
         host_files["bin/" + name] = identity["sha256"]
         tools["bin/" + name] = identity
     struct.pack_into("<I", host_binary, 12, 6)
     lib_identity = a.macho_identity(bytes(host_binary), 1, "arm64", minimum=None, file_type=6)
     libraries = {}
-    for name in ("lib/libicuuc.dylib", "lib/libicui18n.dylib", "stubdata/libicudata.dylib"):
+    for name in a.HOST_LIBRARIES:
         libraries[name] = lib_identity
         host_files[name] = lib_identity["sha256"]
     receipt = {
         "schemaVersion": 1, "hostArtifactSha256": host_hash, "hostSource": "/fixture/host/source",
-        "hostIdentity": {"fileSha256": host_files, "executables": tools, "libraries": libraries},
+        "hostIdentity": {"fileSha256": host_files, "executables": tools, "libraries": libraries,
+                         "filterSha256": filter_hash, "dependencyBindings": a.host_dependency_bindings(tools, libraries)},
         "sdkIdentities": {}, "variants": [], "simulatorMerges": {},
         "minimumDeployment": "13.4", "runtimeTested": False, "authenticatedAttestation": False,
     }
@@ -78,8 +83,16 @@ def apple_fixture(directory, host_hash, lock, filter_hash):
             "path": "/fixture/" + row.sdk, "version": "fixture", "buildVersion": "fixture",
             "settingsSha256": "a" * 64,
             "tools": {name: {"path": "/fixture/" + name, "sha256": "b" * 64}
-                      for name in ("clang", "clang++", "ar", "lipo")},
+                      for name in ("clang", "clang++", "ar", "ranlib", "lipo")},
         }
+        sdk = receipt["sdkIdentities"][row.sdk]
+        config = directory / "variants" / row.name / "configuration"
+        root_values, data_values = configuration_fixture(config, sdk, receipt["hostSource"])
+        b.shutil.copytree(config, config.with_name("configuration-final"))
+        for phase in ("before", "after"):
+            p.write_new(config.parent / f"make-evaluated-{phase}.txt", root_values.encode())
+            p.write_new(config.parent / f"data-make-evaluated-{phase}.txt", data_values.encode())
+        tool_configuration = a.verify_tool_configuration(config, sdk, receipt["hostSource"], root_values, data_values)
         archives = {}
         for library in ("libicuuc.a", "libicudata.a"):
             data = archive(object_file(a.PLATFORMS[row.target], row.arch) + row.name.encode(), library + ".o")
@@ -90,7 +103,7 @@ def apple_fixture(directory, host_hash, lock, filter_hash):
         receipt["variants"].append({
             "name": row.name, "target": row.target, "architecture": row.arch, "platform": a.PLATFORMS[row.target],
             "sdk": row.sdk, "recipe": a.configure_command(row, "/fixture/" + row.sdk, receipt["hostSource"]),
-            "compilerEnvironment": {"CC": "/fixture/clang", "CXX": "/fixture/clang++"},
+            "compilerEnvironment": a.compiler_environment(sdk), "toolConfiguration": tool_configuration,
             "sourceArchiveSha256": lock["archiveSha256"], "filterSha256": filter_hash, "archives": archives,
         })
     for target in ("iossim", "tvossim"):
@@ -255,7 +268,7 @@ class FullFiveContracts(unittest.TestCase):
             self.assertIn("--disable-shared", command)
             self.assertIn("--with-cross-build=" + str(host), command)
             self.assertTrue(any(row.minimum_flag + "=13.4" in value for value in command))
-            self.assertIn(f"CFLAGS=-arch {row.arch} -isysroot {sdk} {row.minimum_flag}=13.4", command)
+            self.assertIn(f"CFLAGS=-arch {row.arch} -isysroot {shlex.quote(str(sdk))} {row.minimum_flag}=13.4", command)
 
     def test_missing_host_build_tree_or_tool_prevents_cross_build(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -299,17 +312,17 @@ class FullFiveContracts(unittest.TestCase):
         a = apple()
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            for name in ("config/icucross.mk", "config.status", "config.log"):
+            for name in a.HOST_CONFIGS:
                 p.write_new(root / name, b"fixture host config")
             obj = bytearray(object_file(1))
             struct.pack_into("<I", obj, 12, 2)
-            for name in ("genrb", "genccode", "gencmn", "icupkg", "pkgdata"):
+            for name in a.HOST_TOOLS:
                 p.write_new(root / "bin" / name, obj)
             struct.pack_into("<I", obj, 12, 6)
-            for name in ("lib/libicuuc.dylib", "lib/libicui18n.dylib", "stubdata/libicudata.dylib"):
+            for name in a.HOST_LIBRARIES:
                 p.write_new(root / name, obj)
             with patch.object(a.os, "access", return_value=True):
-                self.assertEqual(5, len(a.host_identity(root)["executables"]))
+                self.assertEqual(8, len(a.host_identity(root)["executables"]))
                 (root / "bin/pkgdata").unlink()
                 with self.assertRaisesRegex(ValueError, "host"):
                     a.host_identity(root)
