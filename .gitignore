@@ -12,6 +12,8 @@
 /nuget/uno.icu-macos/libicu/
 /nuget/uno.icu-ios/ios/
 /nuget/uno.icu-ios/iossim/
+/nuget/uno.icu-tvos/tvos/
+/nuget/uno.icu-tvos/tvossim/
 /nuget/uno.icu-wasm/buildTransitive/native/
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore

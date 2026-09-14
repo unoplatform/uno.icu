@@ -85,3 +85,5 @@ control. Only after that control should a **fresh `target=all` run** establish
 complete same-run matrix evidence. Do not mix artifacts from the earlier failed
 run, cancel its other native rows, or count contracts as native compilation.
 Signing, release/tag creation and NuGet publication remain unauthorized.
+The [full-five Apple extension](FULL-FIVE-BUILD-ONLY.md) preserves this Windows
+runner, architecture matrix, static CRT and prerequisite policy.

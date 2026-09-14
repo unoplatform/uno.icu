@@ -18,13 +18,17 @@ on:
         description: Contracts only by default; release operations sign and publish
         type: choice
         default: contracts
-        options: [contracts, build-only, raw-smoke, release-dev, release-prod]
+        options: [contracts, build-only, build-full-five, raw-smoke, release-dev, release-prod]
       authorize_native:
         description: Approve the selected build-only or raw-smoke operation without publication
         type: boolean
         default: false
       authorize_release:
         description: Owner explicitly approves signing and publication, not build-only validation
+        type: boolean
+        default: false
+      authorize_apple:
+        description: Separate approval for six additional iOS/tvOS cross-build variants (full-five only)
         type: boolean
         default: false
       expected_sha:
@@ -56,6 +60,7 @@ jobs:
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
           inputs.operation == 'build-only' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
           toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
           inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
           startsWith(github.ref, 'refs/heads/') }}
@@ -68,11 +73,32 @@ jobs:
       expected_sha: ${{ inputs.expected_sha }}
       target: ${{ inputs.target }}
 
+  build_full_five:
+    needs: provenance_contracts
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          inputs.operation == 'build-full-five' && inputs.target == 'all' &&
+          toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
+          toJSON(inputs.authorize_apple) == 'true' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          startsWith(github.ref, 'refs/heads/') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-only.yml
+    with:
+      authorize_native: ${{ inputs.authorize_native }}
+      authorize_release: ${{ inputs.authorize_release }}
+      authorize_apple: ${{ inputs.authorize_apple }}
+      full_five: true
+      expected_sha: ${{ inputs.expected_sha }}
+      target: ${{ inputs.target }}
+
   raw_smoke:
     needs: provenance_contracts
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
           inputs.operation == 'raw-smoke' && inputs.target == 'all' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
           toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
           inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
           startsWith(github.ref, 'refs/heads/') }}
@@ -90,6 +116,7 @@ jobs:
     needs: provenance_contracts
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
           toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
           inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
           ((inputs.operation == 'release-dev' && github.ref == 'refs/heads/main') ||
@@ -451,6 +478,7 @@ jobs:
     name: Sign Package
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
           toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
           inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
           ((inputs.operation == 'release-dev' && github.ref == 'refs/heads/main') ||
@@ -573,6 +601,7 @@ jobs:
     name: Publish Dev
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
           toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
           inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
           inputs.operation == 'release-dev' && github.ref == 'refs/heads/main' }}
@@ -597,6 +626,7 @@ jobs:
     name: Publish Production
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
           toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
           inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
           inputs.operation == 'release-prod' && startsWith(github.ref, 'refs/heads/release/') }}

@@ -78,6 +78,12 @@ rebuilding any producer outputs. See [HOSTED-RAW-SMOKE.md](docs/HOSTED-RAW-SMOKE
 Only its artifact-download step receives a read token; no secrets are inherited
 and no release/build jobs are reachable from that operation.
 
+The separately gated [`build-full-five` operation](docs/FULL-FIVE-BUILD-ONLY.md)
+adds the missing iOS/tvOS native inputs only with explicit expanded Apple approval.
+The default three-package scope is unchanged. Full staging requires 23 payloads,
+platform-aware archive checks and all producer bindings; it does not pack,
+reserve a version, sign or publish.
+
 Fast contracts (the provenance/native-entry tests use the standard library;
 workflow policy tests additionally require the pinned PyYAML in
 `tests/requirements.txt`). Reuse an existing compatible installation, or install

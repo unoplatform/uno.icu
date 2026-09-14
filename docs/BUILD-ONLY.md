@@ -7,6 +7,10 @@ toolchains and full iOS/tvOS release matrix; see [reconciliation](UPSTREAM-RECON
 No old package bytes are inputs. A successful local unit test is
 not a protected hosted job identity or attestation.
 
+This page describes the unchanged **three-package default**. The separate
+[full-five scope](FULL-FIVE-BUILD-ONLY.md) requires `build-full-five` plus an
+explicit Apple resource grant; it does not silently expand `build-only`.
+
 ## Authorization boundary
 
 The approved feature-branch route is the **already registered `main.yml`

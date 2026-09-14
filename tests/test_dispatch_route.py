@@ -27,7 +27,8 @@ def context(operation="build-only", native=True, release=False, ref=REFS[0],
     return {"inputs.operation": operation, "inputs.authorize_native": native,
             "inputs.authorize_release": release, "inputs.expected_sha": SHA,
             "github.sha": SHA, "github.workflow_sha": SHA, "github.ref": ref,
-            "github.repository": repository, "github.event_name": event, "inputs.target": "all"}
+            "github.repository": repository, "github.event_name": event, "inputs.target": "all",
+            "inputs.authorize_apple": False, "inputs.full_five": False}
 
 
 def environment(values, caller="main.yml"):

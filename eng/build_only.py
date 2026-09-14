@@ -16,6 +16,7 @@ import sys
 
 import provenance as p
 import windows_toolchain as windows
+import apple_icu as apple
 
 ROOT = p.ROOT
 OUT = ROOT / "artifacts/build-only"
@@ -23,7 +24,8 @@ VARIANTS = {"data": ("",), "wasm": ("st", "mt", "st,simd", "mt,simd"),
             "windows": ("x64", "arm64"), "macos": ("x86_64", "arm64")}
 BUILD_KEYS = ("GITHUB_REPOSITORY", "GITHUB_SHA", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT",
               "GITHUB_WORKFLOW_REF", "GITHUB_JOB", "RUNNER_OS", "RUNNER_ARCH",
-              "ImageOS", "ImageVersion", "WORKFLOW_SHA", "DISPATCH_OPERATION")
+              "ImageOS", "ImageVersion", "WORKFLOW_SHA", "DISPATCH_OPERATION",
+              "BUILD_SCOPE", "FULL_FIVE", "AUTHORIZE_APPLE")
 
 
 def authorize(env, commit, dirty):
@@ -43,6 +45,11 @@ def authorize(env, commit, dirty):
     direct = f"unoplatform/uno.icu/.github/workflows/build-only.yml@{ref}"
     native, release = env.get("AUTHORIZE_NATIVE"), env.get("AUTHORIZE_RELEASE")
     operation = env.get("DISPATCH_OPERATION", "")
+    # Older three-package callers have no Apple grant. Absence cannot authorize
+    # expansion; the new full scope requires both explicit typed values.
+    apple_grant, full = env.get("AUTHORIZE_APPLE", "false"), env.get("FULL_FIVE", "false")
+    if scope != "build-full-five" and (apple_grant != "false" or full != "false"):
+        raise ValueError("Apple authorization cannot change an existing operation's resource scope")
     if scope == "build-only":
         # Values cross the YAML/environment boundary via toJSON, preserving
         # boolean type. A string "false", integer 0, missing value or mixed
@@ -56,6 +63,14 @@ def authorize(env, commit, dirty):
         if not ((workflow == main and operation == "build-only") or
                 (workflow == direct and operation == "")):
             raise ValueError("Unexpected build-only caller/operation identity")
+    elif scope == "build-full-five":
+        if native != "true" or release != "false" or apple_grant != "true" or full != "true":
+            raise ValueError("Full-five requires native=true, release=false and explicit Apple/full-five booleans")
+        if not ref.startswith("refs/heads/") or env.get("BUILD_TARGET") != "all":
+            raise ValueError("Full-five requires the complete all-target resource group")
+        if not ((workflow == main and operation == "build-full-five") or
+                (workflow == direct and operation == "")):
+            raise ValueError("Unexpected full-five caller/operation identity")
     elif scope == "raw-smoke":
         if native != "true" or release != "false":
             raise ValueError("Raw smoke requires native=true and release=false booleans")
@@ -121,6 +136,10 @@ def expected_payloads(kind, variant="", emscripten=""):
         return {f"nuget/uno.icu-macos/libicu/{name}.dylib" for name in ("libicuuc", "libicudata")}
     if kind == "source":
         return set()
+    if kind == "apple":
+        return set(apple.payload_specs())
+    if kind == "staging-five":
+        return expected_payloads("staging") | expected_payloads("apple")
     if kind == "staging":
         return set().union(expected_payloads("data"), expected_payloads("macos-universal"),
                            *(expected_payloads("windows", v) for v in VARIANTS["windows"]),
@@ -135,6 +154,10 @@ def validate_payloads(bundle, kind, variant, emscripten=""):
         raise ValueError(f"Incomplete/unexpected payload set for {kind}/{variant}")
     for name in actual:
         data = (bundle / "payload" / name).read_bytes()
+        if name in apple.payload_specs():
+            platform_id, architectures = apple.payload_specs()[name]
+            apple.validate_archive(data, platform_id, architectures)
+            continue
         if name.endswith(".a"):
             valid = data.startswith(b"!<arch>\n") and len(data) > 8
         elif name.endswith(".dat"):
@@ -157,10 +180,12 @@ def row_key(kind, variant="", emscripten=""):
     return "-".join(part for part in (kind, emscripten, variant) if part)
 
 
-def matrix_rows():
+def matrix_rows(full_five=False):
     rows = [("source", "", ""), ("data", "", ""), ("macos-universal", "", "")]
     rows += [("wasm", v, version) for version in p.EMSCRIPTEN_VERSIONS for v in VARIANTS["wasm"]]
     rows += [(kind, v, "") for kind in ("windows", "macos") for v in VARIANTS[kind]]
+    if full_five:
+        rows.append(("apple", "", ""))
     return rows
 
 
@@ -243,6 +268,10 @@ def verify_bundle(directory, kind, variant="", emscripten="", env=None):
     if manifest["gitBlobSha256"] != source_inputs():
         raise ValueError("Artifact build-input identity mismatch")
     validate_payloads(directory, kind, variant, emscripten)
+    if kind in ("apple", "staging-five"):
+        if any(manifest["build"].get(key) != value for key, value in
+               {"BUILD_SCOPE": "build-full-five", "FULL_FIVE": "true", "AUTHORIZE_APPLE": "true"}.items()):
+            raise ValueError("Full-five artifact lacks its explicit producer scope")
     if p.sha((directory / "licenses/ICU-LICENSE.txt").read_bytes()) != p.load_lock()["licenseSha256"]:
         raise ValueError("Incomplete upstream license")
     if (directory / "licenses/Uno-LICENSE.md").read_bytes() != repository_bytes("LICENSE.md"):
@@ -350,6 +379,114 @@ def macos_build(build, archive):
         build.run(["lipo", binary, "-verify_arch", build.variant])
         build.run(["otool", "-L", binary])
         build.payload(binary, name)
+    return source
+
+
+def build_apple(host_source, archive, host_bundle):
+    check_authorization()
+    if (os.environ["BUILD_SCOPE"] != "build-full-five" or platform.system() != "Darwin" or
+            platform.machine() != "arm64"):
+        raise ValueError("Apple cross-builds require the approved full-five ARM64 macOS job")
+    expected_host = ROOT / "artifacts/icu" / f'icu-{p.load_lock()["commit"]}/icu4c/source'
+    if host_source.resolve() != expected_host.resolve():
+        raise ValueError("Use this job's newly built ICU ARM64 host tree")
+    host_manifest = verify_bundle(host_bundle, "macos", "arm64")
+    host = apple.host_identity(host_source)
+    build = Build("apple")
+    build.source()
+    p.write_new(build.directory / "host-identity.json", p.json_bytes({
+        "hostArtifactSha256": host_manifest, "hostSource": str(host_source), "hostIdentity": host,
+        "runtimeTested": False, "authenticatedAttestation": False,
+    }))
+    build.run(["xcodebuild", "-version"])
+    workers = build.run(["sysctl", "-n", "hw.physicalcpu"])
+    sdk_records, variant_records = {}, []
+    for variant in apple.VARIANTS:
+        if variant.sdk not in sdk_records:
+            sdk_path = Path(build.run(["xcrun", "--sdk", variant.sdk, "--show-sdk-path"]))
+            sdk_version = build.run(["xcrun", "--sdk", variant.sdk, "--show-sdk-version"])
+            sdk_build = build.run(["xcrun", "--sdk", variant.sdk, "--show-sdk-build-version"])
+            settings = sdk_path / "SDKSettings.plist"
+            if not sdk_path.is_dir() or not settings.is_file():
+                raise ValueError("Required Apple SDK/settings are missing")
+            tools = {}
+            for tool in ("clang", "clang++", "ar", "lipo"):
+                path = Path(build.run(["xcrun", "--sdk", variant.sdk, "--find", tool]))
+                tools[tool] = {"path": str(path), "sha256": p.sha(path.read_bytes())}
+            build.run([tools["clang"]["path"], "--version"])
+            sdk_records[variant.sdk] = {
+                "path": str(sdk_path), "version": sdk_version, "buildVersion": sdk_build,
+                "settingsSha256": p.sha(settings.read_bytes()), "tools": tools,
+                "qualification": "Selected SDK/compiler identity, not a complete SDK-content hash",
+            }
+            p.write_new(build.directory / "sdk" / (variant.sdk + ".json"), p.json_bytes(sdk_records[variant.sdk]))
+        sdk = sdk_records[variant.sdk]
+        extraction = ROOT / "artifacts/apple-sources" / variant.name
+        if extraction.exists():
+            raise FileExistsError("Apple variants require fresh isolated source/intermediate trees")
+        build.run(["unzip", "-q", archive, "-d", extraction])
+        source = extraction / f'icu-{p.load_lock()["commit"]}/icu4c/source'
+        compiler_env = {"CC": sdk["tools"]["clang"]["path"], "CXX": sdk["tools"]["clang++"]["path"]}
+        env = {**os.environ, **compiler_env, "ICU_DATA_FILTER_FILE": str(ROOT / "src/cldr_data/filters.json")}
+        command = apple.configure_command(variant, Path(sdk["path"]), host_source)
+        directory = build.directory / "variants" / variant.name
+        p.write_new(directory / "recipe.json", p.json_bytes({
+            "name": variant.name, "recipe": command, "compilerEnvironment": compiler_env,
+            "sdk": variant.sdk, "hostArtifactSha256": host_manifest,
+            "sourceArchiveSha256": p.load_lock()["archiveSha256"],
+            "filterSha256": p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()),
+        }))
+        try:
+            build.run(command, cwd=source, env=env)
+            build.run(["make", "-j", workers], cwd=source, env=env)
+        finally:
+            for name in ("config.log", "config.status"):
+                if (source / name).is_file():
+                    copy_new(source / name, directory / name)
+        archive_records = {}
+        for library in ("libicuuc.a", "libicudata.a"):
+            binary = source / "lib" / library
+            identity = apple.validate_archive(binary.read_bytes(), apple.PLATFORMS[variant.target], (variant.arch,))
+            copy_new(binary, directory / library)
+            archive_records[library] = identity
+            if not variant.target.endswith("sim"):
+                build.payload(binary, f"nuget/uno.icu-{variant.target}/{variant.target}/{library}")
+        variant_records.append({
+            "name": variant.name, "target": variant.target, "architecture": variant.arch,
+            "platform": apple.PLATFORMS[variant.target], "sdk": variant.sdk, "recipe": command,
+            "compilerEnvironment": compiler_env,
+            "sourceArchiveSha256": p.load_lock()["archiveSha256"],
+            "filterSha256": p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()),
+            "archives": archive_records,
+        })
+        if apple.host_identity(host_source) != host:
+            raise ValueError("Cross-build altered the native host tool inputs")
+        # Only this successfully archived variant's fresh tree is removed.
+        # Failures leave their working tree and retained command/config logs.
+        if extraction.resolve().parent != (ROOT / "artifacts/apple-sources").resolve() or extraction.name != variant.name:
+            raise ValueError("Unexpected Apple working-tree cleanup scope")
+        shutil.rmtree(extraction)
+    merged = {}
+    for target, sdk_name in (("iossim", "iphonesimulator"), ("tvossim", "appletvsimulator")):
+        family = "ios" if target == "iossim" else "tvos"
+        for library in ("libicuuc.a", "libicudata.a"):
+            relative = f"nuget/uno.icu-{family}/{target}/{library}"
+            destination = build.directory / "payload" / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            inputs = [build.directory / "variants" / f"{target}-{arch}" / library for arch in ("arm64", "x86_64")]
+            tool = sdk_records[sdk_name]["tools"]["lipo"]["path"]
+            build.run([tool, "-create", *inputs, "-output", destination])
+            build.run([tool, destination, "-verify_arch", "arm64", "x86_64"])
+            merged[relative] = apple.validate_archive(destination.read_bytes(), apple.PLATFORMS[target],
+                                                       ("arm64", "x86_64"))
+    p.write_new(build.directory / "apple-build.json", p.json_bytes({
+        "schemaVersion": 1, "hostArtifactSha256": host_manifest, "hostIdentity": host, "hostSource": str(host_source),
+        "sdkIdentities": sdk_records, "variants": variant_records, "simulatorMerges": merged,
+        "minimumDeployment": "13.4", "runtimeTested": False, "authenticatedAttestation": False,
+    }))
+    apple.verify_receipt(build.directory, host_manifest, p.load_lock(),
+                         p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()))
+    build.finish({"build-only-macos-arm64": host_manifest})
 
 
 def merge_macos(incoming):
@@ -369,10 +506,10 @@ def merge_macos(incoming):
     build.finish(parents)
 
 
-def assemble(incoming):
-    build = Build("staging")
+def assemble(incoming, full_five=False):
+    build = Build("staging-five" if full_five else "staging")
     build.source()
-    rows = matrix_rows()
+    rows = matrix_rows(full_five)
     expected = {"build-only-" + row_key(*row) for row in rows}
     if {d.name for d in incoming.iterdir()} != expected:
         raise ValueError("Complete, exact same-run artifact matrix required")
@@ -386,6 +523,17 @@ def assemble(incoming):
         if kind not in ("source", "macos"):
             for payload in expected_payloads(kind, variant, emscripten):
                 build.payload(directory / "payload" / payload, payload)
+    if full_five:
+        apple_manifest = json.loads((incoming / "build-only-apple/artifact.json").read_text(encoding="utf-8"))
+        expected_host = {"build-only-macos-arm64": parents["build-only-macos-arm64"]}
+        if apple_manifest["inputArtifacts"] != expected_host:
+            raise ValueError("Apple archives do not bind this producer's ARM64 host")
+        apple.verify_receipt(incoming / "build-only-apple", expected_host["build-only-macos-arm64"],
+                             p.load_lock(), apple_manifest["inputSha256"]["src/cldr_data/filters.json"])
+        universal = json.loads((incoming / "build-only-macos-universal/artifact.json").read_text(encoding="utf-8"))
+        if universal["inputArtifacts"] != {name: parents[name] for name in
+                                          ("build-only-macos-arm64", "build-only-macos-x86_64")}:
+            raise ValueError("Full staging universal libraries do not bind their exact native input rows")
     source = incoming / "build-only-source/icu-source.zip"
     p.verify_source(source, p.load_lock())
     copy_new(source, build.directory / "icu-source.zip")
@@ -404,8 +552,9 @@ def main():
     if args.command == "authorize":
         print("Explicit dispatch inputs and clean source identity checked; not a protected attestation.")
         return
-    if os.environ["BUILD_SCOPE"] != "build-only":
+    if os.environ["BUILD_SCOPE"] not in ("build-only", "build-full-five"):
         raise ValueError("Build-only commands cannot enter a release scope")
+    full_five = os.environ["BUILD_SCOPE"] == "build-full-five"
     if args.command == "source":
         build = Build("source")
         copy_new(build.source(), build.directory / "icu-source.zip")
@@ -422,12 +571,14 @@ def main():
         elif args.kind == "windows":
             windows_build(build, archive)
         else:
-            macos_build(build, archive)
+            host_source = macos_build(build, archive)
         build.finish()
+        if full_five and args.kind == "macos" and args.variant == "arm64":
+            build_apple(host_source, archive, build.directory)
     elif args.command == "merge-macos" and os.environ["BUILD_TARGET"] in ("all", "macos"):
         merge_macos(args.incoming)
     elif args.command == "assemble" and os.environ["BUILD_TARGET"] == "all":
-        assemble(args.incoming)
+        assemble(args.incoming, full_five)
     else:
         raise ValueError("Aggregation exceeds authorized resource group")
 
