@@ -179,10 +179,21 @@ requires the exact same-run sixteen producer bundle set, and checks host and
 universal-input manifest dependencies. All notices and producer evidence are
 retained. These inventories are not protected attestations.
 
-Both raw archive files are now retained before validating either one. A rejected
-archive gets an `archive-validation-failure.json` containing its hash, variant,
-expected target and the member-level error with actual CPU/platform/minimum/SDK.
-Rejection still prevents that variant's payload promotion and any complete Apple manifest.
+Both existing raw archive files are retained byte-for-byte, including zero-length
+and truncated files, before validating either one. This retention-only copy does
+not relax the normal nonempty payload-copy guard or overwrite existing evidence.
+A rejected archive gets an `archive-validation-failure.json` containing its
+hash (including the SHA-256 of an empty file), variant, expected target and
+validation error. Member-level errors include actual CPU/platform/minimum/SDK
+when those fields can be decoded.
+
+If an archive is missing or cannot be read/written, retention still attempts the
+sibling and fails before content validation. When the evidence directory is
+writable, `archive-retention-failure.json` records each I/O error and hashes/sizes
+only for successfully retained files. Missing bytes are not fabricated, and
+previous or partially written evidence is not deleted or treated as successful
+retention. Rejection prevents that variant's payload promotion and any complete
+Apple manifest.
 The next failure can therefore be independently decoded without accepting or
 rewriting its bytes. Current tests include retained-device metadata controls
 and explicit simulator policy fixtures, **not a recovered failing archive**.

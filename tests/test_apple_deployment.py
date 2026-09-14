@@ -5,6 +5,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "eng"))
 import apple_icu as a
@@ -138,6 +139,128 @@ class AppleDeployment(unittest.TestCase):
                 self.assertIn("offending.ao", failure["error"])
                 self.assertFalse((directory / "artifact.json").exists())
                 self.assertFalse((directory / "payload").exists())
+
+    def test_empty_common_or_data_archive_is_retained_before_validation(self):
+        variant = next(row for row in a.VARIANTS if row.name == "iossim-arm64")
+        libraries = ("libicuuc.a", "libicudata.a")
+        empty_sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        for empty in ((libraries[0],), (libraries[1],), libraries):
+            with tempfile.TemporaryDirectory() as temp:
+                source, directory = Path(temp) / "cross", Path(temp) / "retained"
+                contents = {name: b"" if name in empty else archive(object_file(7, "arm64", 0x000E0000))
+                            for name in libraries}
+                for name, data in contents.items():
+                    p.write_new(source / "lib" / name, data)
+                with self.subTest(empty=empty), self.assertRaises(ValueError):
+                    b.retain_apple_archives(source, directory, variant)
+                for name, data in contents.items():
+                    self.assertEqual(data, (directory / name).read_bytes())
+                    self.assertEqual(data, (source / "lib" / name).read_bytes())
+                failure = json.loads((directory / "archive-validation-failure.json").read_text())
+                self.assertEqual(next(name for name in libraries if name in empty), failure["archive"])
+                self.assertEqual(empty_sha, failure["archiveSha256"])
+                self.assertFalse(failure["runtimeTested"])
+                self.assertFalse((directory / "payload").exists())
+                self.assertFalse((directory / "artifact.json").exists())
+                self.assertFalse((directory / "archive-retention-failure.json").exists())
+
+    def test_truncated_archive_bytes_are_retained_without_repair(self):
+        variant = a.VARIANTS[0]
+        with tempfile.TemporaryDirectory() as temp:
+            source, directory = Path(temp) / "cross", Path(temp) / "retained"
+            partial = b"!<arch>\npartial-header"
+            other = archive(object_file(2))
+            p.write_new(source / "lib/libicuuc.a", partial)
+            p.write_new(source / "lib/libicudata.a", other)
+            with self.assertRaises(ValueError):
+                b.retain_apple_archives(source, directory, variant)
+            self.assertEqual(partial, (directory / "libicuuc.a").read_bytes())
+            self.assertEqual(other, (directory / "libicudata.a").read_bytes())
+            failure = json.loads((directory / "archive-validation-failure.json").read_text())
+            self.assertEqual(p.sha(partial), failure["archiveSha256"])
+            self.assertIn("Truncated", failure["error"])
+            self.assertFalse((directory / "artifact.json").exists())
+
+    def test_missing_archives_retain_available_sibling_and_report_no_fabricated_bytes(self):
+        libraries = ("libicuuc.a", "libicudata.a")
+        for missing in ((libraries[0],), (libraries[1],), libraries):
+            with tempfile.TemporaryDirectory() as temp:
+                source, directory = Path(temp) / "cross", Path(temp) / "retained"
+                for name in libraries:
+                    if name not in missing:
+                        p.write_new(source / "lib" / name, b"")
+                with self.subTest(missing=missing), self.assertRaises(OSError):
+                    b.retain_apple_archives(source, directory, a.VARIANTS[0])
+                failure = json.loads((directory / "archive-retention-failure.json").read_text())
+                self.assertEqual(set(missing), {item["archive"] for item in failure["errors"]})
+                for item in failure["errors"]:
+                    self.assertEqual("FileNotFoundError", item["errorType"])
+                    self.assertNotIn("archiveSha256", item)
+                    self.assertTrue(item["error"])
+                self.assertEqual(set(libraries) - set(missing), set(failure["retainedArchives"]))
+                for name in libraries:
+                    if name in missing:
+                        self.assertFalse((directory / name).exists())
+                    else:
+                        self.assertEqual(b"", (directory / name).read_bytes())
+                        self.assertEqual({"bytes": 0, "sha256": p.sha(b"")}, failure["retainedArchives"][name])
+                self.assertFalse((directory / "payload").exists())
+                self.assertFalse((directory / "artifact.json").exists())
+                self.assertFalse((directory / "archive-validation-failure.json").exists())
+
+    def test_retention_never_overwrites_an_existing_destination(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, directory = Path(temp) / "cross", Path(temp) / "retained"
+            p.write_new(source / "lib/libicuuc.a", b"new common")
+            p.write_new(source / "lib/libicudata.a", b"new data")
+            p.write_new(directory / "libicuuc.a", b"previous evidence")
+            with self.assertRaises(OSError):
+                b.retain_apple_archives(source, directory, a.VARIANTS[0])
+            self.assertEqual(b"previous evidence", (directory / "libicuuc.a").read_bytes())
+            self.assertEqual(b"new data", (directory / "libicudata.a").read_bytes())
+            failure = json.loads((directory / "archive-retention-failure.json").read_text())
+            self.assertEqual("FileExistsError", failure["errors"][0]["errorType"])
+            self.assertEqual({"libicudata.a"}, set(failure["retainedArchives"]))
+            self.assertFalse((directory / "artifact.json").exists())
+
+    def test_partial_write_failure_keeps_bytes_and_retains_sibling_without_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, directory = Path(temp) / "cross", Path(temp) / "retained"
+            p.write_new(source / "lib/libicuuc.a", b"complete common")
+            p.write_new(source / "lib/libicudata.a", b"complete data")
+            write_new = p.write_new
+
+            def fail_common_write(path, data):
+                if path == directory / "libicuuc.a":
+                    write_new(path, data[:4])
+                    raise OSError("fixture interrupted write")
+                write_new(path, data)
+
+            with patch.object(p, "write_new", side_effect=fail_common_write), self.assertRaises(OSError):
+                b.retain_apple_archives(source, directory, a.VARIANTS[0])
+            self.assertEqual(b"comp", (directory / "libicuuc.a").read_bytes())
+            self.assertEqual(b"complete data", (directory / "libicudata.a").read_bytes())
+            failure = json.loads((directory / "archive-retention-failure.json").read_text())
+            self.assertEqual("fixture interrupted write", failure["errors"][0]["error"])
+            self.assertEqual({"libicudata.a"}, set(failure["retainedArchives"]))
+            self.assertFalse((directory / "archive-validation-failure.json").exists())
+            self.assertFalse((directory / "artifact.json").exists())
+            self.assertFalse((directory / "payload").exists())
+
+    def test_empty_raw_retention_does_not_relax_normal_payload_copy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "empty.a"
+            p.write_new(source, b"")
+            with self.assertRaisesRegex(ValueError, "Missing/empty"):
+                b.copy_new(source, root / "ordinary-copy.a")
+            self.assertFalse((root / "ordinary-copy.a").exists())
+            with patch.object(b, "OUT", root / "build"):
+                build = b.Build("apple")
+                with self.assertRaisesRegex(ValueError, "Missing/empty"):
+                    build.payload(source, "nuget/uno.icu-ios/ios/libicuuc.a")
+                self.assertFalse((build.directory / "payload").exists())
+                self.assertFalse((build.directory / "artifact.json").exists())
 
     def test_receipt_rejects_substituted_per_variant_support_minimum(self):
         with tempfile.TemporaryDirectory() as temp:

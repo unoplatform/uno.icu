@@ -391,8 +391,23 @@ def extract_apple_source(build, archive, variant):
 
 def retain_apple_archives(source, directory, variant):
     libraries = ("libicuuc.a", "libicudata.a")
+    retained, errors = {}, []
     for library in libraries:
-        copy_new(source / "lib" / library, directory / library)
+        try:
+            data = (source / "lib" / library).read_bytes()
+            p.write_new(directory / library, data)
+        except OSError as error:
+            errors.append((library, error))
+        else:
+            retained[library] = {"bytes": len(data), "sha256": p.sha(data)}
+    if errors:
+        p.write_new(directory / "archive-retention-failure.json", p.json_bytes({
+            "variant": variant.name, "retainedArchives": retained,
+            "errors": [{"archive": library, "errorType": type(error).__name__, "error": str(error)}
+                       for library, error in errors],
+            "runtimeTested": False, "authenticatedAttestation": False,
+        }))
+        raise OSError("Failed to retain Apple raw archives: " + ", ".join(library for library, _ in errors)) from errors[0][1]
     records = {}
     for library in libraries:
         data = (directory / library).read_bytes()
