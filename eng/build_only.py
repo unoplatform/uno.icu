@@ -382,6 +382,13 @@ def macos_build(build, archive):
     return source
 
 
+def extract_apple_source(build, archive, variant):
+    extraction = ROOT / "artifacts/apple-sources" / variant.name
+    extraction.mkdir(parents=True, exist_ok=False)
+    build.run(["unzip", "-q", archive, "-d", extraction])
+    return extraction
+
+
 def build_apple(host_source, archive, host_bundle):
     check_authorization()
     if (os.environ["BUILD_SCOPE"] != "build-full-five" or platform.system() != "Darwin" or
@@ -424,10 +431,7 @@ def build_apple(host_source, archive, host_bundle):
             }
             p.write_new(build.directory / "sdk" / (variant.sdk + ".json"), p.json_bytes(sdk_records[variant.sdk]))
         sdk = sdk_records[variant.sdk]
-        extraction = ROOT / "artifacts/apple-sources" / variant.name
-        if extraction.exists():
-            raise FileExistsError("Apple variants require fresh isolated source/intermediate trees")
-        build.run(["unzip", "-q", archive, "-d", extraction])
+        extraction = extract_apple_source(build, archive, variant)
         source = extraction / f'icu-{p.load_lock()["commit"]}/icu4c/source'
         compiler_env = apple.compiler_environment(sdk)
         env = apple.variant_environment(os.environ, sdk, ROOT / "src/cldr_data/filters.json")

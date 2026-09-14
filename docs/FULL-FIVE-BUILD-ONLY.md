@@ -1,4 +1,4 @@
-# Explicit full-five native-input preparation (unexecuted)
+# Explicit full-five native-input preparation
 
 `main.yml` adds **`operation=build-full-five`**, separate from existing
 `build-only` and `raw-smoke`. This is native-input preparation only. It never
@@ -43,6 +43,13 @@ job**, after its normal ICU host build finishes:
 
 The host tree is reused **within that job**, never reconstructed from an old
 thin-library artifact. Each variant gets a fresh source/intermediate directory.
+The extractor creates missing parent directories and exclusively creates each
+variant directory before invoking `unzip`; existing empty, partial or populated
+destinations fail rather than being reused or overwritten. Extraction failures
+retain the command, exit code, diagnostic log and any partial tree, without a
+success manifest. Real `unzip` fixtures exercise all six fresh nested paths,
+pre-existing destination/parent conflicts and failed extraction; no fixture
+executes configure or a compiler.
 Successful variant trees are removed only after archives, recipe and config
 evidence have been retained; failures retain their working tree and diagnostics.
 This bounds peak working trees to the native host plus one cross variant, while
@@ -63,8 +70,17 @@ without changing machine or process `PATH`. Existing configure options are
 preserved: static libraries/data,
 disabled shared/tools/extras/tests/samples/dyload, existing host/build triplets,
 `-stdlib=libc++`, C++17 and the platform-specific **13.4 minimum** flags.
-Actual SDK availability and recipe execution remain unverified until an approved
-hosted run. There are no default-toolchain or missing-SDK success fallbacks.
+There are no default-toolchain or missing-SDK success fallbacks.
+
+The first expanded run,
+[34835674087](https://github.com/unoplatform/uno.icu/actions/runs/34835674087)
+at `bd49e19c7cacc4b2f3af7443f9c3a2e7fe6ad673`, built the native ARM64 host and
+discovered Xcode 16.4 / iPhoneOS 18.5 and its compiler/archive tools. It failed
+before the first `ios-arm64` configure: `unzip` could not create the destination
+because `artifacts/apple-sources` did not exist. The fresh-directory preparation
+above corrects that lifecycle failure. The remaining SDKs, all Apple cross
+recipes and full staging still require actual hosted qualification; this
+failed run is not retroactively a pass.
 
 ## Consumed host inputs and archive-tool selection
 
@@ -164,7 +180,8 @@ gh workflow run main.yml --repo unoplatform/uno.icu `
   -f authorize_apple=true -f target=all -f expected_sha=<new-reviewed-source-commit>
 ```
 
-This command has not been executed. A successful three-host raw-smoke run does
+The first expanded-run authorization was consumed; publishing or executing a
+reviewed retry requires fresh parent/user approval. A successful three-host raw-smoke run does
 not cover these new Apple archives, universal macOS execution, Windows ARM64/
 WASM runtime, physical AT or full GA. The expanded host/SDK/platform evidence
 remains missing until actual execution. Unit fixtures test binary formats and
