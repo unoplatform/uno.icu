@@ -1,5 +1,10 @@
 # Same-producer stage-two candidates (not executed)
 
+This document retains the earlier run-34746077621 preparation examples.
+The durable hosted follow-up now uses the separately reviewed completed
+run-34811569292 plan in [HOSTED-RAW-SMOKE.md](HOSTED-RAW-SMOKE.md). Do not mix
+artifacts or manifest identities between those producer sets.
+
 This local reconciliation retains the Windows prerequisite fix and optional raw
 smoke adapter. It does not dispatch a run, alter the existing PR, or interpret
 ambiguous dispatch responses as either success or a global GitHub outage.

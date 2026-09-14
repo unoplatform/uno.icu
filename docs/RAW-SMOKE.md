@@ -1,9 +1,10 @@
 # Raw ICU/data smoke and unsigned input binding
 
-This is a **local follow-up entry**, not a modification to an active hosted
-build. `tests/raw_icu_smoke.py` consumes completed, owner-selected build-only
-artifacts. It does not discover/download artifacts or observe/dispatch runs.
-No workflow invokes it automatically in this change.
+`tests/raw_icu_smoke.py` consumes completed, owner-selected build-only artifacts.
+It does not discover/download artifacts or observe/dispatch runs itself.
+The separate, explicitly authorized [hosted raw-smoke follow-up](HOSTED-RAW-SMOKE.md)
+validates and downloads the reviewed plan's inputs before invoking this entry.
+No default event invokes it, and the build-only workflow still does not run it.
 
 Prepared invocations for the already verified producer set are recorded in
 [STAGE2-PROBE-CANDIDATES.md](STAGE2-PROBE-CANDIDATES.md). They are not execution

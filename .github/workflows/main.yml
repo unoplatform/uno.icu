@@ -18,9 +18,9 @@ on:
         description: Contracts only by default; release operations sign and publish
         type: choice
         default: contracts
-        options: [contracts, build-only, release-dev, release-prod]
+        options: [contracts, build-only, raw-smoke, release-dev, release-prod]
       authorize_native:
-        description: Approve build-only native validation without signing or publication
+        description: Approve the selected build-only or raw-smoke operation without publication
         type: boolean
         default: false
       authorize_release:
@@ -31,7 +31,7 @@ on:
         description: Full reviewed commit SHA (required for native validation or release)
         type: string
       target:
-        description: Approved build-only resource group
+        description: Build-only resource group; raw-smoke requires all (fixed Windows/macOS hosts)
         type: choice
         default: all
         options: [all, linux, windows, macos]
@@ -62,6 +62,24 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/build-only.yml
+    with:
+      authorize_native: ${{ inputs.authorize_native }}
+      authorize_release: ${{ inputs.authorize_release }}
+      expected_sha: ${{ inputs.expected_sha }}
+      target: ${{ inputs.target }}
+
+  raw_smoke:
+    needs: provenance_contracts
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          inputs.operation == 'raw-smoke' && inputs.target == 'all' &&
+          toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          startsWith(github.ref, 'refs/heads/') }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/raw-smoke.yml
     with:
       authorize_native: ${{ inputs.authorize_native }}
       authorize_release: ${{ inputs.authorize_release }}

@@ -242,9 +242,10 @@ The next independently reported probe stage must:
 3. Record separate probe JSON identifying the input bundle manifests and actual
    library/data hashes. Preserve, rather than rewrite, the build manifests.
 
-The [raw-library/data adapter](RAW-SMOKE.md) now reuses those assertions through
-a fresh isolated worker. It is **not wired into these workflows and has not
-executed newly built native bytes merely because its unit contracts pass**.
+The [raw-library/data adapter](RAW-SMOKE.md) reuses those assertions through
+a fresh isolated worker. A separate [manual hosted raw-smoke route](HOSTED-RAW-SMOKE.md)
+can consume completed producer outputs without rebuilding them. The build-only
+workflow does not invoke it, and its unit contracts are not execution evidence.
 The existing nupkg probe remains supported separately. Do not fabricate packages,
 use old payloads, bypass the five-package pack guard, or claim smoke success from
 `runtimeTested=false`. Parent-owned native UI/physical AT checks follow coherent
@@ -266,8 +267,8 @@ git diff --check
 ```
 
 The policy tests evaluate the **actual YAML guards**, including the complete
-600-case operation x native/release boolean x ref x repository x event table,
-1,500 malformed-flag cases, caller/ref/SHA mismatches and direct-entry opt-in.
+720-case operation x native/release boolean x ref x repository x event table,
+1,800 malformed-flag cases, caller/ref/SHA mismatches and direct-entry opt-in.
 They model Actions truthiness/loose comparison and verify explicit child
 permissions/input forwarding with no secret inheritance. This is local policy
 coverage, not a hosted workflow execution or protected job identity.

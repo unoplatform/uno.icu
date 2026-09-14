@@ -56,6 +56,13 @@ def authorize(env, commit, dirty):
         if not ((workflow == main and operation == "build-only") or
                 (workflow == direct and operation == "")):
             raise ValueError("Unexpected build-only caller/operation identity")
+    elif scope == "raw-smoke":
+        if native != "true" or release != "false":
+            raise ValueError("Raw smoke requires native=true and release=false booleans")
+        if not ref.startswith("refs/heads/") or env.get("BUILD_TARGET") != "all":
+            raise ValueError("Raw smoke requires the explicit all-host scope on a reviewed branch")
+        if workflow != main or operation != "raw-smoke":
+            raise ValueError("Unexpected raw-smoke caller/operation identity")
     elif ((scope == "release-dev" and ref == "refs/heads/main") or
           (scope == "release-prod" and ref.startswith("refs/heads/release/"))):
         if native != "false" or release != "true":

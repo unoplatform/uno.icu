@@ -13,7 +13,7 @@ from workflow_expression import Expression
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA = "a" * 40
-OPERATIONS = ("contracts", "build-only", "release-dev", "release-prod", "invalid")
+OPERATIONS = ("contracts", "build-only", "raw-smoke", "release-dev", "release-prod", "invalid")
 REFS = ("refs/heads/dev/reviewed", "refs/heads/main", "refs/heads/release/77.4",
         "refs/tags/77.4.1", "refs/pull/1/merge")
 
@@ -27,7 +27,7 @@ def context(operation="build-only", native=True, release=False, ref=REFS[0],
     return {"inputs.operation": operation, "inputs.authorize_native": native,
             "inputs.authorize_release": release, "inputs.expected_sha": SHA,
             "github.sha": SHA, "github.workflow_sha": SHA, "github.ref": ref,
-            "github.repository": repository, "github.event_name": event}
+            "github.repository": repository, "github.event_name": event, "inputs.target": "all"}
 
 
 def environment(values, caller="main.yml"):
@@ -39,16 +39,17 @@ def environment(values, caller="main.yml"):
         "AUTHORIZE_RELEASE": json.dumps(values["inputs.authorize_release"]),
         "EXPECTED_SHA": values["inputs.expected_sha"], "GITHUB_SHA": values["github.sha"],
         "WORKFLOW_SHA": values["github.workflow_sha"], "GITHUB_REF": ref,
-        "BUILD_SCOPE": values["inputs.operation"], "BUILD_TARGET": "all",
+        "BUILD_SCOPE": values["inputs.operation"], "BUILD_TARGET": values["inputs.target"],
         "DISPATCH_OPERATION": values["inputs.operation"] if caller == "main.yml" else "",
         "GITHUB_WORKFLOW_REF": f'{values["github.repository"]}/.github/workflows/{caller}@{ref}',
     }
 
 
 def permitted(values):
-    native = (values["inputs.operation"] == "build-only" and
+    native = (values["inputs.operation"] in ("build-only", "raw-smoke") and
               values["inputs.authorize_native"] is True and values["inputs.authorize_release"] is False and
-              values["github.ref"].startswith("refs/heads/"))
+              values["github.ref"].startswith("refs/heads/") and
+              (values["inputs.operation"] != "raw-smoke" or values["inputs.target"] == "all"))
     release = (values["inputs.authorize_native"] is False and values["inputs.authorize_release"] is True and
                ((values["inputs.operation"] == "release-dev" and values["github.ref"] == "refs/heads/main") or
                 (values["inputs.operation"] == "release-prod" and values["github.ref"].startswith("refs/heads/release/"))))
@@ -87,7 +88,7 @@ class DispatchRoute(unittest.TestCase):
 
     def test_complete_operation_boolean_ref_repository_event_truth_table(self):
         jobs = workflow("main.yml")["jobs"]
-        names = ("build_only", "release_authorization", "sign", "publish_dev", "publish_prod")
+        names = ("build_only", "raw_smoke", "release_authorization", "sign", "publish_dev", "publish_prod")
         guards = {name: Expression(jobs.get(name, {}).get("if", "${{ false }}")) for name in names}
         mismatches = []
         count = 0
@@ -97,7 +98,7 @@ class DispatchRoute(unittest.TestCase):
             count += 1
             values = context(*args)
             native, release = permitted(values)
-            expected = (native, release, release,
+            expected = (native and args[0] == "build-only", native and args[0] == "raw-smoke", release, release,
                         release and args[0] == "release-dev", release and args[0] == "release-prod")
             actual = tuple(guards[name].evaluate(values) for name in names)
             if actual != expected:
@@ -110,13 +111,13 @@ class DispatchRoute(unittest.TestCase):
                 entry_allowed = False
             if entry_allowed != (native or release):
                 mismatches.append(("entry", args, native or release, entry_allowed))
-        self.assertEqual(600, count)
+        self.assertEqual(720, count)
         self.assertEqual([], mismatches, repr(mismatches[:8]))
 
     def test_malformed_authorization_and_sha_never_open_a_route(self):
         jobs = workflow("main.yml")["jobs"]
         guards = [Expression(jobs.get(name, {}).get("if", "${{ false }}")) for name in
-                  ("build_only", "release_authorization", "sign", "publish_dev", "publish_prod")]
+                  ("build_only", "raw_smoke", "release_authorization", "sign", "publish_dev", "publish_prod")]
         mismatches = []
         for operation, ref, native, release in itertools.product(
                 OPERATIONS, REFS, (True, False, "true", "false", "", None, 0, 1),
@@ -200,6 +201,69 @@ class DispatchRoute(unittest.TestCase):
         self.assertTrue(Expression("${{ inputs.authorize_native == true }}").evaluate(context(native=1)))
         self.assertFalse(Expression("${{ toJSON(inputs.authorize_native) == 'true' }}").evaluate(context(native=1)))
         self.assertTrue(Expression("${{ startsWith(github.ref, 'REFS/HEADS/') }}").evaluate(context()))
+
+    def test_raw_smoke_reaches_no_build_release_or_write_permissions(self):
+        main = workflow("main.yml")
+        jobs = main["jobs"]
+        guards = {name: Expression(job.get("if", "${{ true }}")) for name, job in jobs.items()}
+        for native, release, ref, repository, event in itertools.product(
+                (True, False), (True, False), REFS,
+                ("unoplatform/uno.icu", "someone/uno.icu"),
+                ("workflow_dispatch", "push", "pull_request")):
+            values = context("raw-smoke", native, release, ref, repository, event)
+            active = set()
+            while True:
+                before = set(active)
+                for name, job in jobs.items():
+                    needs = job.get("needs", [])
+                    needs = [needs] if isinstance(needs, str) else needs
+                    if set(needs) <= active and guards[name].evaluate(values):
+                        active.add(name)
+                if before == active:
+                    break
+            self.assertEqual({"provenance_contracts", "raw_smoke"} if permitted(values)[0]
+                             else {"provenance_contracts"}, active)
+            for name in active:
+                permissions = jobs[name].get("permissions", main["permissions"])
+                self.assertTrue(all(value == "read" for value in permissions.values()))
+                self.assertNotIn("environment", jobs[name])
+                self.assertNotIn("secrets", jobs[name])
+
+    def test_raw_smoke_rejects_direct_other_callers_and_ambiguous_target(self):
+        values = context("raw-smoke")
+        b.authorize(environment(values), SHA, "")
+        for caller in ("build-only.yml", "raw-smoke.yml", "other.yml"):
+            with self.subTest(caller=caller), self.assertRaises(ValueError):
+                b.authorize(environment(values, caller), SHA, "")
+        guard = Expression(workflow("main.yml")["jobs"]["raw_smoke"]["if"])
+        for target in ("linux", "windows", "macos", "", None):
+            changed = {**values, "inputs.target": target}
+            self.assertFalse(guard.evaluate(changed))
+            with self.assertRaises(ValueError):
+                b.authorize(environment(changed), SHA, "")
+
+    def test_raw_smoke_workflow_has_fixed_hosts_and_step_scoped_download_token(self):
+        main = workflow("main.yml")["jobs"]["raw_smoke"]
+        self.assertEqual("./.github/workflows/raw-smoke.yml", main["uses"])
+        self.assertEqual({"contents": "read", "actions": "read"}, main["permissions"])
+        self.assertNotIn("secrets", main)
+        child = workflow("raw-smoke.yml")
+        self.assertEqual({"workflow_call"}, set(child["on"]))
+        self.assertNotIn("secrets", child["on"]["workflow_call"])
+        self.assertEqual({"contents": "read", "actions": "read"}, child["permissions"])
+        job = child["jobs"]["probe"]
+        matrix = job["strategy"]["matrix"]["include"]
+        self.assertEqual({("windows-x64", "windows-2022"), ("macos-x86_64", "macos-15-intel"),
+                          ("macos-arm64", "macos-15")}, {(x["row"], x["runner"]) for x in matrix})
+        token_steps = [step for step in job["steps"] if "GH_TOKEN" in step.get("env", {})]
+        self.assertEqual(["Download approved producer artifacts"], [step["name"] for step in token_steps])
+        self.assertNotIn("GH_TOKEN", child["env"])
+        for step in job["steps"]:
+            if step.get("uses", "").startswith("actions/checkout@"):
+                self.assertEqual("false", step["with"]["persist-credentials"])
+                self.assertEqual("0", step["with"]["fetch-depth"])
+            if "uses" in step:
+                self.assertRegex(step["uses"], r"^actions/[\w-]+@[0-9a-f]{40}$")
 
 
 if __name__ == "__main__":

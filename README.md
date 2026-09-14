@@ -70,6 +70,14 @@ contracts; they cannot start native jobs or publication in the workflows in
 this revision. Remote default-branch automation must still be reviewed before
 publishing a branch/PR; local edits do not disable installed owner automation.
 
+For a **runtime-only follow-up**, `main.yml` also exposes the separately guarded
+`operation=raw-smoke` route. It consumes the reviewed relative
+`eng/raw-smoke-plan.json`, validates the completed producer through read-only
+GitHub APIs, and probes Windows x64 plus both native macOS thin rows without
+rebuilding any producer outputs. See [HOSTED-RAW-SMOKE.md](docs/HOSTED-RAW-SMOKE.md).
+Only its artifact-download step receives a read token; no secrets are inherited
+and no release/build jobs are reachable from that operation.
+
 Fast contracts (the provenance/native-entry tests use the standard library;
 workflow policy tests additionally require the pinned PyYAML in
 `tests/requirements.txt`). Reuse an existing compatible installation, or install
