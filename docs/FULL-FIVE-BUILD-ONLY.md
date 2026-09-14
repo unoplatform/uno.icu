@@ -67,9 +67,10 @@ Required SDK selectors are `iphoneos`, `iphonesimulator`, `appletvos` and
 clang/clang++/ar/ranlib/lipo paths/hashes are retained. `CC`, `CXX`, `AR` and
 `RANLIB` explicitly select those recorded paths, overriding inherited values
 without changing machine or process `PATH`. Existing configure options are
-preserved: static libraries/data,
-disabled shared/tools/extras/tests/samples/dyload, existing host/build triplets,
-`-stdlib=libc++`, C++17 and the platform-specific **13.4 minimum** flags.
+preserved: static libraries/data, disabled shared/tools/extras/tests/samples/dyload,
+existing host/build triplets, `-stdlib=libc++` and C++17. Deployment flags now
+explicitly follow the per-variant policy below: **13.4 for devices and Intel
+simulators; 14.0 for ARM64 simulators**.
 There are no default-toolchain or missing-SDK success fallbacks.
 
 The first expanded run,
@@ -78,9 +79,19 @@ at `bd49e19c7cacc4b2f3af7443f9c3a2e7fe6ad673`, built the native ARM64 host and
 discovered Xcode 16.4 / iPhoneOS 18.5 and its compiler/archive tools. It failed
 before the first `ios-arm64` configure: `unzip` could not create the destination
 because `artifacts/apple-sources` did not exist. The fresh-directory preparation
-above corrects that lifecycle failure. The remaining SDKs, all Apple cross
-recipes and full staging still require actual hosted qualification; this
-failed run is not retroactively a pass.
+above corrects that lifecycle failure; this failed run is not retroactively a pass.
+
+The approved retry,
+[34851642559](https://github.com/unoplatform/uno.icu/actions/runs/34851642559)
+at `16214039a82a7b457e2f928334b060a1e010cae3`, advanced through the iOS ARM64 device
+build and then failed validation of `iossim-arm64/libicuuc.a`, after its make
+command completed. The simulator C/C++ and pkgdata commands requested 13.4.
+The rejected archive was not retained because copying followed validation.
+Consequently its exact offending member and actual platform/minimum/SDK fields
+are **unknown**; no fixture or other-run archive can fill that evidence gap.
+Both retained device archives were independently decoded: all 202 objects are
+ARM64, platform 2, minimum 13.4. Common objects report SDK 18.5; the assembly data
+object reports SDK 0, which is not a platform/minimum failure.
 
 ## Consumed host inputs and archive-tool selection
 
@@ -113,14 +124,18 @@ tool variables without executing an archiver. It reconciles `icudefs.mk`,
 evaluated make variables and pkgdata's actual `AR`/`ARFLAGS`/`RANLIB`/`COMPILE`
 configuration with the recorded SDK tools. Host paths, invocation search order,
 pkgdata's `-O` configuration and generated data-rule tool names are also checked.
+Declared and evaluated `CFLAGS`/`CXXFLAGS` and pkgdata `COMPILE` must each select
+the exact variant architecture, SDK and deployment flag. Conflicting target,
+sysroot, platform or minimum overrides fail; the data archive cannot silently
+use a different target from the common library.
 Before/after generated makefiles, configuration hashes and evaluations are
 retained; selection or configuration changes fail receipt verification.
 
 Command paths are shell-quoted and parsed as single selected executables.
 ICU's pkgdata template can remove quoting from a space-containing archiver path;
 an ambiguous generated command is rejected, not silently split or substituted.
-These checks are locked-source reasoning and synthetic configuration tests
-until an approved Apple run executes the real generated-make/configure path.
+The earlier tool checks executed on the first two variants in the retry.
+The new target/minimum checks still require qualification on an approved run.
 No claim of byte reproducibility, protected attestation or native acceptance
 follows from the receipts alone.
 
@@ -132,26 +147,45 @@ object member, including BSD extended/GNU long names, and validates archive
 and universal-slice bounds.
 
 Every object must be a matching 64-bit Mach-O object with exactly one explicit
-`LC_BUILD_VERSION`, minimum **13.4**, and the required platform:
+`LC_BUILD_VERSION`, the exact per-architecture minimum and required platform:
 
-| Final directory | Platform ID | Architectures |
+| Final directory | Platform ID | Exact deployment minimum |
 | --- | --- | --- |
-| `ios` | 2, iOS device | ARM64 |
-| `iossim` | 7, iOS simulator | ARM64 + x86_64 |
-| `tvos` | 3, tvOS device | ARM64 |
-| `tvossim` | 8, tvOS simulator | ARM64 + x86_64 |
+| `ios` | 2, iOS device | ARM64: 13.4 |
+| `iossim` | 7, iOS simulator | ARM64: 14.0; x86_64: 13.4 |
+| `tvos` | 3, tvOS device | ARM64: 13.4 |
+| `tvossim` | 8, tvOS simulator | ARM64: 14.0; x86_64: 13.4 |
+
+The ARM64 simulator floor is defined by Apple/Swift LLVM's
+[`Triple::getMinimumSupportedOSVersion`](https://github.com/swiftlang/llvm-project/blob/901f89886dcd5d1eaf07c8504d58c90f37b0cfdf/llvm/lib/TargetParser/Triple.cpp#L2055-L2074).
+Its [Darwin driver](https://github.com/swiftlang/llvm-project/blob/901f89886dcd5d1eaf07c8504d58c90f37b0cfdf/clang/lib/Driver/ToolChains/Darwin.cpp#L3521-L3524)
+enforces supported minima. This proves the old ARM64 simulator recipe requested
+an unsupported minimum, not the missing archive's actual bytes or that this
+public source exactly built the hosted Apple clang binary. Device and Intel
+simulator 13.4 support is unchanged. Validation accepts neither arbitrary higher
+versions nor an ARM64 simulator claiming 13.4.
 
 Ambiguous legacy version-min tags are rejected; platform is not inferred from
 CPU alone. Empty/thin-reference/malformed archives, missing or overlapping fat
 slices, mixed member platforms and wrong deployment minima fail. Simulator
 fat slices must hash to the exact separately validated thin archives.
 
-`apple-build.json` binds all six recipes, source archive/filter hashes,
+`apple-build.json` schema 2 records `minimumDeploymentByVariant`; archive
+identities record `minimumDeploymentByArchitecture`, including both distinct
+simulator slice minima. It binds all six recipes, source archive/filter hashes,
 SDK/compiler identities, host manifest/tools and per-member archive identities.
 The full assembler revalidates that receipt and all retained thin/final archives,
 requires the exact same-run sixteen producer bundle set, and checks host and
 universal-input manifest dependencies. All notices and producer evidence are
 retained. These inventories are not protected attestations.
+
+Both raw archive files are now retained before validating either one. A rejected
+archive gets an `archive-validation-failure.json` containing its hash, variant,
+expected target and the member-level error with actual CPU/platform/minimum/SDK.
+Rejection still prevents that variant's payload promotion and any complete Apple manifest.
+The next failure can therefore be independently decoded without accepting or
+rewriting its bytes. Current tests include retained-device metadata controls
+and explicit simulator policy fixtures, **not a recovered failing archive**.
 
 ## Final input shape and pack guard
 
@@ -180,7 +214,7 @@ gh workflow run main.yml --repo unoplatform/uno.icu `
   -f authorize_apple=true -f target=all -f expected_sha=<new-reviewed-source-commit>
 ```
 
-The first expanded-run authorization was consumed; publishing or executing a
+Both approved expanded attempts were consumed; publishing or executing another
 reviewed retry requires fresh parent/user approval. A successful three-host raw-smoke run does
 not cover these new Apple archives, universal macOS execution, Windows ARM64/
 WASM runtime, physical AT or full GA. The expanded host/SDK/platform evidence

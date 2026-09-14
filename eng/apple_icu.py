@@ -19,10 +19,22 @@ HOST_TOOLS = ("genrb", "genccode", "gencmn", "icupkg", "pkgdata", "gencnval", "g
 HOST_LIBRARIES = ("lib/libicuuc.dylib", "lib/libicui18n.dylib", "lib/libicutu.dylib",
                   "stubdata/libicudata.dylib")
 LOCAL_OVERRIDES = ("icudefs.local", "Makefile.local", "common/Makefile.local", "data/Makefile.local")
-TOOL_VARIABLES = ("CC", "CXX", "AR", "ARFLAGS", "RANLIB", "TOOLBINDIR", "TOOLLIBDIR",
+TOOL_VARIABLES = ("CC", "CXX", "CFLAGS", "CXXFLAGS", "AR", "ARFLAGS", "RANLIB", "TOOLBINDIR", "TOOLLIBDIR",
                   "cross_buildroot", "INVOKE", "PKGDATA_INVOKE")
 CONFIGURATION_FILES = ("Makefile", "common/Makefile", "data/Makefile", "icudefs.mk",
                        "config/mh-darwin", "data/pkgdataMakefile", "data/icupkg.inc", "data/rules.mk")
+
+
+def deployment_minimum(platform, arch):
+    if platform not in PLATFORMS.values() or arch not in CPUS:
+        raise ValueError("Unknown Apple deployment target")
+    # Apple/Swift LLVM Triple::getMinimumSupportedOSVersion: ARM64 simulators start at 14.
+    return 0x000E0000 if platform in (7, 8) and arch == "arm64" else MINIMUM
+
+
+def version_string(value):
+    result = f"{value >> 16}.{(value >> 8) & 255}"
+    return result + (f".{value & 255}" if value & 255 else "")
 
 
 @dataclass(frozen=True)
@@ -37,6 +49,10 @@ class Variant:
     def name(self):
         return self.target + "-" + self.arch
 
+    @property
+    def minimum(self):
+        return version_string(deployment_minimum(PLATFORMS[self.target], self.arch))
+
 
 VARIANTS = (
     Variant("ios", "arm64", "iphoneos", "-mios-version-min", "arm-apple"),
@@ -46,6 +62,10 @@ VARIANTS = (
     Variant("tvossim", "arm64", "appletvsimulator", "-mtvos-simulator-version-min", "arm64-apple"),
     Variant("tvossim", "x86_64", "appletvsimulator", "-mtvos-simulator-version-min", "x86_64-apple"),
 )
+
+
+def deployment_policy():
+    return {variant.name: variant.minimum for variant in VARIANTS}
 
 
 def payload_specs():
@@ -59,7 +79,7 @@ def payload_specs():
 def configure_command(variant, sdk, host):
     if variant not in VARIANTS:
         raise ValueError("Unknown Apple cross-build variant")
-    flags = f"-arch {variant.arch} -isysroot {shlex.quote(str(sdk))} {variant.minimum_flag}=13.4"
+    flags = f"-arch {variant.arch} -isysroot {shlex.quote(str(sdk))} {variant.minimum_flag}={variant.minimum}"
     return [
         "./configure", "--enable-static", "--disable-shared", "--with-data-packaging=static",
         "--disable-tools", "--disable-extras", "--disable-tests", "--disable-samples", "--disable-dyload",
@@ -173,6 +193,32 @@ def verify_tool_configuration(source, sdk, host_source, root_output, data_output
     }
 
 
+def verify_variant_configuration(source, sdk, host_source, root_output, data_output, variant):
+    if variant not in VARIANTS:
+        raise ValueError("Unknown Apple cross-build variant")
+    result = verify_tool_configuration(source, sdk, host_source, root_output, data_output)
+    declared = configuration_assignments((source / "icudefs.mk").read_text(encoding="utf-8"),
+                                         ("CFLAGS", "CXXFLAGS"))
+    flags = [declared["CFLAGS"], declared["CXXFLAGS"], result["pkgdata"]["COMPILE"]]
+    for config in (result["makeEvaluated"], result["dataMakeEvaluated"]):
+        flags.extend((config["CFLAGS"], config["CXXFLAGS"]))
+    for value in flags:
+        tokens = shlex.split(value)
+        for name, expected in (("-arch", variant.arch), ("-isysroot", sdk["path"])):
+            positions = [index for index, token in enumerate(tokens) if token == name]
+            if (len(positions) != 1 or tokens[positions[0] + 1:positions[0] + 2] != [expected] or
+                    any(token.startswith(name) and token != name for token in tokens)):
+                raise ValueError("Generated Apple compile flags substitute " + name)
+        minima = [token for token in tokens if token.startswith("-m") and "version-min" in token]
+        if (minima != [variant.minimum_flag + "=" + variant.minimum] or
+                any(token.startswith(("-target", "--target", "-darwin-target-variant", "-mtargetos", "--sysroot"))
+                    for token in tokens)):
+            raise ValueError("Generated Apple compile flags substitute platform/deployment target")
+    result["target"] = {"platform": PLATFORMS[variant.target], "architecture": variant.arch,
+                        "sdkPath": sdk["path"], "minimumDeployment": variant.minimum}
+    return result
+
+
 def macho_identity(data, platform, arch, minimum=MINIMUM, file_type=1):
     if len(data) < 32 or data[:4] != b"\xcf\xfa\xed\xfe":
         raise ValueError("Expected a 64-bit little-endian Mach-O member")
@@ -220,7 +266,11 @@ def macho_identity(data, platform, arch, minimum=MINIMUM, file_type=1):
         raise ValueError("Exactly one explicit LC_BUILD_VERSION is required")
     actual_platform, minos, sdk = versions[0]
     if actual_platform != platform or (minimum is not None and minos != minimum):
-        raise ValueError("Wrong Apple device/simulator platform or deployment minimum")
+        expected_minimum = version_string(minimum) if minimum is not None else "unrestricted"
+        raise ValueError(
+            f"Wrong Apple device/simulator platform or deployment minimum: cpu={cpu:#x}, subtype={subtype:#x}, "
+            f"platform={actual_platform}, minimum={version_string(minos)}, sdk={version_string(sdk)}; "
+            f"expected platform={platform}, minimum={expected_minimum}")
     return {"architecture": arch, "cpu": cpu, "cpuSubtype": subtype, "fileType": actual_type, "platform": actual_platform,
             "minimumVersion": minos, "sdkVersionInObject": sdk, "sha256": p.sha(data),
             "installName": install_name, "dylibDependencies": dependencies}
@@ -307,10 +357,16 @@ def validate_archive(data, platform, architectures):
         raise ValueError("Incomplete archive architecture set")
     details = {}
     for arch, contents in slices.items():
-        details[arch] = [{"member": name, **macho_identity(member, platform, arch)}
-                         for name, member in ar_members(contents)]
+        details[arch] = []
+        for name, member in ar_members(contents):
+            try:
+                identity = macho_identity(member, platform, arch, minimum=deployment_minimum(platform, arch))
+            except ValueError as error:
+                raise ValueError(f"{arch} archive member {name}: {error}") from error
+            details[arch].append({"member": name, **identity})
     return {"sha256": p.sha(data), "architectures": list(slices), "platform": platform,
-            "minimumDeployment": "13.4", "members": details,
+            "minimumDeploymentByArchitecture": {arch: version_string(deployment_minimum(platform, arch)) for arch in slices},
+            "members": details,
             "sliceSha256": {arch: p.sha(contents) for arch, contents in slices.items()}, "runtimeTested": False}
 
 
@@ -424,8 +480,8 @@ def verify_host_identity(identity, filter_sha):
 def verify_receipt(directory, host_digest, source_lock, filter_sha):
     """Check retained thin/final archive bindings without executing any tool."""
     receipt = json.loads((directory / "apple-build.json").read_text(encoding="utf-8"))
-    if (receipt["schemaVersion"] != 1 or receipt["hostArtifactSha256"] != host_digest or
-            receipt["minimumDeployment"] != "13.4" or receipt["runtimeTested"] is not False or
+    if (receipt["schemaVersion"] != 2 or receipt["hostArtifactSha256"] != host_digest or
+            receipt["minimumDeploymentByVariant"] != deployment_policy() or receipt["runtimeTested"] is not False or
             receipt["authenticatedAttestation"] is not False or not receipt.get("hostSource")):
         raise ValueError("Invalid Apple host/build receipt")
     verify_host_identity(receipt["hostIdentity"], filter_sha)
@@ -441,6 +497,7 @@ def verify_receipt(directory, host_digest, source_lock, filter_sha):
         sdk = receipt["sdkIdentities"][variant.sdk]
         if (entry["target"] != variant.target or entry["architecture"] != variant.arch or
                 entry["platform"] != PLATFORMS[variant.target] or entry["sdk"] != variant.sdk or
+                entry["minimumDeployment"] != variant.minimum or
                 entry["sourceArchiveSha256"] != source_lock["archiveSha256"] or
                 entry["filterSha256"] != filter_sha or
                 entry["recipe"] != configure_command(variant, sdk["path"], receipt["hostSource"]) or
@@ -454,14 +511,14 @@ def verify_receipt(directory, host_digest, source_lock, filter_sha):
             if not tool["path"] or not re.fullmatch("[0-9a-f]{64}", tool["sha256"]):
                 raise ValueError("Invalid Apple compiler/tool identity")
         variant_dir = directory / "variants" / variant.name
-        before = verify_tool_configuration(
+        before = verify_variant_configuration(
             variant_dir / "configuration", sdk, receipt["hostSource"],
             (variant_dir / "make-evaluated-before.txt").read_text(encoding="utf-8"),
-            (variant_dir / "data-make-evaluated-before.txt").read_text(encoding="utf-8"))
-        after = verify_tool_configuration(
+            (variant_dir / "data-make-evaluated-before.txt").read_text(encoding="utf-8"), variant)
+        after = verify_variant_configuration(
             variant_dir / "configuration-final", sdk, receipt["hostSource"],
             (variant_dir / "make-evaluated-after.txt").read_text(encoding="utf-8"),
-            (variant_dir / "data-make-evaluated-after.txt").read_text(encoding="utf-8"))
+            (variant_dir / "data-make-evaluated-after.txt").read_text(encoding="utf-8"), variant)
         if before != after or before != entry["toolConfiguration"]:
             raise ValueError("Retained archive tool/configuration binding mismatch")
         if set(entry["archives"]) != {"libicuuc.a", "libicudata.a"}:

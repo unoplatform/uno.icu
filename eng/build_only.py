@@ -389,6 +389,26 @@ def extract_apple_source(build, archive, variant):
     return extraction
 
 
+def retain_apple_archives(source, directory, variant):
+    libraries = ("libicuuc.a", "libicudata.a")
+    for library in libraries:
+        copy_new(source / "lib" / library, directory / library)
+    records = {}
+    for library in libraries:
+        data = (directory / library).read_bytes()
+        try:
+            records[library] = apple.validate_archive(data, apple.PLATFORMS[variant.target], (variant.arch,))
+        except ValueError as error:
+            p.write_new(directory / "archive-validation-failure.json", p.json_bytes({
+                "variant": variant.name, "archive": library, "archiveSha256": p.sha(data),
+                "expectedPlatform": apple.PLATFORMS[variant.target], "expectedArchitecture": variant.arch,
+                "expectedMinimumDeployment": variant.minimum, "error": str(error),
+                "runtimeTested": False, "authenticatedAttestation": False,
+            }))
+            raise
+    return records
+
+
 def build_apple(host_source, archive, host_bundle):
     check_authorization()
     if (os.environ["BUILD_SCOPE"] != "build-full-five" or platform.system() != "Darwin" or
@@ -439,6 +459,7 @@ def build_apple(host_source, archive, host_bundle):
         directory = build.directory / "variants" / variant.name
         p.write_new(directory / "recipe.json", p.json_bytes({
             "name": variant.name, "recipe": command, "compilerEnvironment": compiler_env,
+            "minimumDeployment": variant.minimum,
             "sdk": variant.sdk, "hostArtifactSha256": host_manifest,
             "sourceArchiveSha256": p.load_lock()["archiveSha256"],
             "filterSha256": p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()),
@@ -459,7 +480,7 @@ def build_apple(host_source, archive, host_bundle):
             data_values = build.run(data_probe_command, cwd=source, env=env)
             p.write_new(directory / "make-evaluated-before.txt", root_values.encode("utf-8"))
             p.write_new(directory / "data-make-evaluated-before.txt", data_values.encode("utf-8"))
-            configuration = apple.verify_tool_configuration(source, sdk, str(host_source), root_values, data_values)
+            configuration = apple.verify_variant_configuration(source, sdk, str(host_source), root_values, data_values, variant)
             for name in apple.CONFIGURATION_FILES:
                 copy_new(source / name, directory / "configuration" / name)
             p.write_new(directory / "tool-configuration.json", p.json_bytes(configuration))
@@ -468,7 +489,7 @@ def build_apple(host_source, archive, host_bundle):
             data_after = build.run(data_probe_command, cwd=source, env=env)
             p.write_new(directory / "make-evaluated-after.txt", root_after.encode("utf-8"))
             p.write_new(directory / "data-make-evaluated-after.txt", data_after.encode("utf-8"))
-            if apple.verify_tool_configuration(source, sdk, str(host_source), root_after, data_after) != configuration:
+            if apple.verify_variant_configuration(source, sdk, str(host_source), root_after, data_after, variant) != configuration:
                 raise ValueError("Archive tool/configuration selection changed during the build")
         finally:
             for name in ("config.log", "config.status"):
@@ -477,17 +498,14 @@ def build_apple(host_source, archive, host_bundle):
             for name in apple.CONFIGURATION_FILES:
                 if (source / name).is_file():
                     copy_new(source / name, directory / "configuration-final" / name)
-        archive_records = {}
-        for library in ("libicuuc.a", "libicudata.a"):
-            binary = source / "lib" / library
-            identity = apple.validate_archive(binary.read_bytes(), apple.PLATFORMS[variant.target], (variant.arch,))
-            copy_new(binary, directory / library)
-            archive_records[library] = identity
+        archive_records = retain_apple_archives(source, directory, variant)
+        for library in archive_records:
             if not variant.target.endswith("sim"):
-                build.payload(binary, f"nuget/uno.icu-{variant.target}/{variant.target}/{library}")
+                build.payload(directory / library, f"nuget/uno.icu-{variant.target}/{variant.target}/{library}")
         variant_records.append({
             "name": variant.name, "target": variant.target, "architecture": variant.arch,
             "platform": apple.PLATFORMS[variant.target], "sdk": variant.sdk, "recipe": command,
+            "minimumDeployment": variant.minimum,
             "compilerEnvironment": compiler_env,
             "toolConfiguration": configuration,
             "sourceArchiveSha256": p.load_lock()["archiveSha256"],
@@ -515,9 +533,9 @@ def build_apple(host_source, archive, host_bundle):
             merged[relative] = apple.validate_archive(destination.read_bytes(), apple.PLATFORMS[target],
                                                        ("arm64", "x86_64"))
     p.write_new(build.directory / "apple-build.json", p.json_bytes({
-        "schemaVersion": 1, "hostArtifactSha256": host_manifest, "hostIdentity": host, "hostSource": str(host_source),
+        "schemaVersion": 2, "hostArtifactSha256": host_manifest, "hostIdentity": host, "hostSource": str(host_source),
         "sdkIdentities": sdk_records, "variants": variant_records, "simulatorMerges": merged,
-        "minimumDeployment": "13.4", "runtimeTested": False, "authenticatedAttestation": False,
+        "minimumDeploymentByVariant": apple.deployment_policy(), "runtimeTested": False, "authenticatedAttestation": False,
     }))
     apple.verify_receipt(build.directory, host_manifest, p.load_lock(),
                          p.sha((ROOT / "src/cldr_data/filters.json").read_bytes()))

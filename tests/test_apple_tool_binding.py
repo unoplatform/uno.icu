@@ -45,13 +45,17 @@ def with_dependency(data, name):
 
 
 def sdk_fixture():
-    return {"tools": {name: {"path": "/selected SDK tools/" + name, "sha256": "a" * 64}
+    return {"path": "/fixture/sdk", "tools": {name: {"path": "/selected SDK tools/" + name, "sha256": "a" * 64}
                       for name in ("clang", "clang++", "ar", "ranlib", "lipo")}}
 
 
-def configuration_fixture(root, sdk, host="/host/source"):
+def configuration_fixture(root, sdk, host="/host/source", variant=None):
+    variant = variant or a.VARIANTS[0]
+    minimum = "14.0" if variant.target in ("iossim", "tvossim") and variant.arch == "arm64" else "13.4"
+    flags = f"-arch {variant.arch} -isysroot {shlex.quote(sdk['path'])} {variant.minimum_flag}={minimum}"
     env = {name: shlex.quote(sdk["tools"][tool]["path"])
            for name, tool in (("CC", "clang"), ("CXX", "clang++"), ("AR", "ar"), ("RANLIB", "ranlib"))}
+    env.update(CFLAGS=flags, CXXFLAGS=flags + " -c -stdlib=libc++ --std=c++17")
     p.write_new(root / "icudefs.mk",
                 ("\n".join(f"{name} = {value}" for name, value in env.items()) + "\nARFLAGS = r\n").encode())
     p.write_new(root / "config/mh-darwin", b"ARFLAGS += -c\n")
@@ -60,7 +64,7 @@ def configuration_fixture(root, sdk, host="/host/source"):
     p.write_new(root / "data/pkgdataMakefile", b"# fixture matching locked pkgdata template\n")
     p.write_new(root / "data/rules.mk", b"$(INVOKE) $(TOOLBINDIR)/gencnval\n$(INVOKE) $(TOOLBINDIR)/genbrk\n$(INVOKE) $(TOOLBINDIR)/gendict\n$(INVOKE) $(TOOLBINDIR)/genrb\n$(INVOKE) $(TOOLBINDIR)/icupkg\n")
     p.write_new(root / "data/icupkg.inc",
-                (f"AR={env['AR']}\nARFLAGS=r -c\nRANLIB={env['RANLIB']}\nCOMPILE={env['CC']} -c fixture.c\n").encode())
+                (f"AR={env['AR']}\nARFLAGS=r -c\nRANLIB={env['RANLIB']}\nCOMPILE={env['CC']} {flags} -c fixture.c\n").encode())
     values = {**env, "ARFLAGS": "r -c", "TOOLBINDIR": host + "/bin",
               "TOOLLIBDIR": host + "/lib", "cross_buildroot": host,
               "INVOKE": f"DYLD_LIBRARY_PATH={host}/lib:{host}/stubdata:{host}/tools/ctestfw:$DYLD_LIBRARY_PATH",

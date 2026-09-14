@@ -26,7 +26,9 @@ def apple():
     return importlib.import_module("apple_icu")
 
 
-def object_file(platform_id, arch="arm64", minimum=0x000D0400):
+def object_file(platform_id, arch="arm64", minimum=None):
+    if minimum is None:
+        minimum = 0x000E0000 if platform_id in (7, 8) and arch == "arm64" else 0x000D0400
     cpu, subtype = (0x100000C, 0) if arch == "arm64" else (0x1000007, 3)
     header = struct.pack("<IiiIIIII", 0xFEEDFACF, cpu, subtype, 1, 1, 24, 0, 0)
     return header + struct.pack("<IIIIII", 0x32, 24, platform_id, minimum, 0, 0)
@@ -72,11 +74,13 @@ def apple_fixture(directory, host_hash, lock, filter_hash):
         libraries[name] = lib_identity
         host_files[name] = lib_identity["sha256"]
     receipt = {
-        "schemaVersion": 1, "hostArtifactSha256": host_hash, "hostSource": "/fixture/host/source",
+        "schemaVersion": 2, "hostArtifactSha256": host_hash, "hostSource": "/fixture/host/source",
         "hostIdentity": {"fileSha256": host_files, "executables": tools, "libraries": libraries,
                          "filterSha256": filter_hash, "dependencyBindings": a.host_dependency_bindings(tools, libraries)},
         "sdkIdentities": {}, "variants": [], "simulatorMerges": {},
-        "minimumDeployment": "13.4", "runtimeTested": False, "authenticatedAttestation": False,
+        "minimumDeploymentByVariant": {row.name: "14.0" if row.name in ("iossim-arm64", "tvossim-arm64") else "13.4"
+                                        for row in a.VARIANTS},
+        "runtimeTested": False, "authenticatedAttestation": False,
     }
     for row in a.VARIANTS:
         receipt["sdkIdentities"][row.sdk] = {
@@ -87,12 +91,12 @@ def apple_fixture(directory, host_hash, lock, filter_hash):
         }
         sdk = receipt["sdkIdentities"][row.sdk]
         config = directory / "variants" / row.name / "configuration"
-        root_values, data_values = configuration_fixture(config, sdk, receipt["hostSource"])
+        root_values, data_values = configuration_fixture(config, sdk, receipt["hostSource"], row)
         b.shutil.copytree(config, config.with_name("configuration-final"))
         for phase in ("before", "after"):
             p.write_new(config.parent / f"make-evaluated-{phase}.txt", root_values.encode())
             p.write_new(config.parent / f"data-make-evaluated-{phase}.txt", data_values.encode())
-        tool_configuration = a.verify_tool_configuration(config, sdk, receipt["hostSource"], root_values, data_values)
+        tool_configuration = a.verify_variant_configuration(config, sdk, receipt["hostSource"], root_values, data_values, row)
         archives = {}
         for library in ("libicuuc.a", "libicudata.a"):
             data = archive(object_file(a.PLATFORMS[row.target], row.arch) + row.name.encode(), library + ".o")
@@ -102,6 +106,7 @@ def apple_fixture(directory, host_hash, lock, filter_hash):
                 p.write_new(directory / f"payload/nuget/uno.icu-{row.target}/{row.target}" / library, data)
         receipt["variants"].append({
             "name": row.name, "target": row.target, "architecture": row.arch, "platform": a.PLATFORMS[row.target],
+            "minimumDeployment": receipt["minimumDeploymentByVariant"][row.name],
             "sdk": row.sdk, "recipe": a.configure_command(row, "/fixture/" + row.sdk, receipt["hostSource"]),
             "compilerEnvironment": a.compiler_environment(sdk), "toolConfiguration": tool_configuration,
             "sourceArchiveSha256": lock["archiveSha256"], "filterSha256": filter_hash, "archives": archives,
@@ -267,8 +272,9 @@ class FullFiveContracts(unittest.TestCase):
             self.assertIn("--with-data-packaging=static", command)
             self.assertIn("--disable-shared", command)
             self.assertIn("--with-cross-build=" + str(host), command)
-            self.assertTrue(any(row.minimum_flag + "=13.4" in value for value in command))
-            self.assertIn(f"CFLAGS=-arch {row.arch} -isysroot {shlex.quote(str(sdk))} {row.minimum_flag}=13.4", command)
+            minimum = "14.0" if row.name in ("iossim-arm64", "tvossim-arm64") else "13.4"
+            self.assertTrue(any(row.minimum_flag + "=" + minimum in value for value in command))
+            self.assertIn(f"CFLAGS=-arch {row.arch} -isysroot {shlex.quote(str(sdk))} {row.minimum_flag}={minimum}", command)
 
     def test_missing_host_build_tree_or_tool_prevents_cross_build(self):
         with tempfile.TemporaryDirectory() as temp:
