@@ -1,14 +1,13 @@
-name: "Pull Request Labeler"
+name: Label automation disabled
 on:
-- pull_request_target
+  workflow_dispatch:
 
 jobs:
   triage:
+    # Deliberately inert: branch/PR publication must not mutate labels.
+    # Re-enabling automation is a separate owner-reviewed policy change.
     permissions:
       contents: read
-      pull-requests: write
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v4
-      with:
-        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      - run: echo "Automatic label mutation is disabled."

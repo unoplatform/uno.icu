@@ -7,13 +7,20 @@
         <authors>Uno Platform</authors>
         <owners>unoplatform</owners>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <license type="file">LICENSE.txt</license>
+        <readme>NOTICE.md</readme>
         <projectUrl>https://github.com/unoplatform/uno.icu</projectUrl>
-        <iconUrl>https://nv-assets.azurewebsites.net/logos/uno.png</iconUrl>
         <description>The International Components for Unicode for macOS</description>
         <copyright>Copyright (C) 2015-2025 Uno Platform inc. - all rights reserved</copyright>
-        <repository type="git" url="https://github.com/unoplatform/uno.icu.git" />
+        <repository type="git" url="https://github.com/unoplatform/uno.icu.git" commit="$RepositoryCommit$" />
     </metadata>
     <files>
+        <file src="..\provenance\LICENSE.txt" target="" />
+        <file src="..\provenance\NOTICE.md" target="" />
+        <file src="..\provenance\ICU-LICENSE.txt" target="licenses" />
+        <file src="..\provenance\Uno-LICENSE.md" target="licenses" />
+        <file src="..\provenance\source.json" target="provenance" />
+        <file src="..\provenance\Uno.icu-macos.payloads.json" target="provenance" />
         <file src="buildTransitive\Uno.icu-macos.targets" target="buildTransitive" />
         <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
         <file src="..\icudt.dat" target="buildTransitive" />

@@ -1,4 +1,4 @@
-name: Build and publish
+name: ICU validation and explicit release
 
 on:
   push:
@@ -13,12 +13,131 @@ on:
       - release/**
 
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Contracts only by default; release operations sign and publish
+        type: choice
+        default: contracts
+        options: [contracts, build-only, build-full-five, raw-smoke, release-dev, release-prod]
+      authorize_native:
+        description: Approve the selected build-only or raw-smoke operation without publication
+        type: boolean
+        default: false
+      authorize_release:
+        description: Owner explicitly approves signing and publication, not build-only validation
+        type: boolean
+        default: false
+      authorize_apple:
+        description: Separate approval for six additional iOS/tvOS cross-build variants (full-five only)
+        type: boolean
+        default: false
+      expected_sha:
+        description: Full reviewed commit SHA (required for native validation or release)
+        type: string
+      target:
+        description: Build-only resource group; raw-smoke requires all (fixed Windows/macOS hosts)
+        type: choice
+        default: all
+        options: [all, linux, windows, macos]
   
-env:
-  ICU_SOURCE_ZIP_URL: https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip
+permissions:
+  contents: read
 
 jobs:
+  provenance_contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m venv artifacts/validation-env
+          artifacts/validation-env/bin/python -m pip install --no-cache-dir -r tests/requirements.txt
+          artifacts/validation-env/bin/python -m unittest discover -s tests -v
+
+  build_only:
+    needs: provenance_contracts
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          inputs.operation == 'build-only' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
+          toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          startsWith(github.ref, 'refs/heads/') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-only.yml
+    with:
+      authorize_native: ${{ inputs.authorize_native }}
+      authorize_release: ${{ inputs.authorize_release }}
+      expected_sha: ${{ inputs.expected_sha }}
+      target: ${{ inputs.target }}
+
+  build_full_five:
+    needs: provenance_contracts
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          inputs.operation == 'build-full-five' && inputs.target == 'all' &&
+          toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
+          toJSON(inputs.authorize_apple) == 'true' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          startsWith(github.ref, 'refs/heads/') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-only.yml
+    with:
+      authorize_native: ${{ inputs.authorize_native }}
+      authorize_release: ${{ inputs.authorize_release }}
+      authorize_apple: ${{ inputs.authorize_apple }}
+      full_five: true
+      expected_sha: ${{ inputs.expected_sha }}
+      target: ${{ inputs.target }}
+
+  raw_smoke:
+    needs: provenance_contracts
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          inputs.operation == 'raw-smoke' && inputs.target == 'all' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
+          toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          startsWith(github.ref, 'refs/heads/') }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/raw-smoke.yml
+    with:
+      authorize_native: ${{ inputs.authorize_native }}
+      authorize_release: ${{ inputs.authorize_release }}
+      expected_sha: ${{ inputs.expected_sha }}
+      target: ${{ inputs.target }}
+
+  release_authorization:
+    needs: provenance_contracts
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
+          toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          ((inputs.operation == 'release-dev' && github.ref == 'refs/heads/main') ||
+           (inputs.operation == 'release-prod' && startsWith(github.ref, 'refs/heads/release/'))) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 eng/build_only.py authorize
+        env:
+          AUTHORIZE_NATIVE: ${{ toJSON(inputs.authorize_native) }}
+          AUTHORIZE_RELEASE: ${{ toJSON(inputs.authorize_release) }}
+          DISPATCH_OPERATION: ${{ github.event.inputs.operation }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          BUILD_SCOPE: ${{ inputs.operation }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+
   build_unoicu:
+    needs: [provenance_contracts, release_authorization]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -31,13 +150,17 @@ jobs:
         multithreaded: [true, false]
         simd: [true, false]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Free disk space (Linux)
         uses: ./.github/actions/host-cleanup-linux
 
       - name: Build unoicu.a
         run: |
+          python eng/provenance.py fetch-source --archive icu.zip
+          cp icu.zip src/unoicu/icu.zip
           pushd src/unoicu
           FEATURE_DIR=$([ "${{ matrix.multithreaded }}" = 'true' ] && echo 'mt' || echo 'st')
           SIMD_SUFFIX=$([ "${{ matrix.simd }}" = 'true' ] && echo ',simd' || echo '')
@@ -60,17 +183,22 @@ jobs:
           path: ./src/unoicu/out/unoicu.a
 
   build_icudt:
+    needs: [provenance_contracts, release_authorization]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Free disk space (Linux)
         uses: ./.github/actions/host-cleanup-linux
 
       - name: Build icudt.dat
         run: |
+          python eng/provenance.py fetch-source --archive icu.zip
+          cp icu.zip src/cldr_data/icu.zip
           pushd src/cldr_data
-          docker build --build-arg ICU_SOURCE_ZIP_URL=${ICU_SOURCE_ZIP_URL} --output type=local,dest=. .
+          docker build --output type=local,dest=. .
           popd
 
       - name: Upload icudt.dat
@@ -80,17 +208,21 @@ jobs:
           path: ./src/cldr_data/icudt.dat
 
   build_libicu_windows:
+    needs: [provenance_contracts, release_authorization]
     runs-on: 'windows-2025'
     
     steps:
       - uses: microsoft/setup-msbuild@v2
     
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
     
       - name: Build ICU
         shell: pwsh
         run: |
-          curl -L -o icu.zip $env:ICU_SOURCE_ZIP_URL
+          python eng/provenance.py fetch-source --archive icu.zip
+          if ($LASTEXITCODE -ne 0) { throw "ICU source verification failed" }
           Expand-Archive icu.zip -DestinationPath icu
           $env:ICU_DATA_FILTER_FILE = "$PWD/src/cldr_data/filters.json"
 
@@ -100,7 +232,9 @@ jobs:
           Get-ChildItem -Recurse -Filter *.vcxproj | ForEach-Object { (Get-Content $_.FullName) -replace 'MultiThreadedDLL', 'MultiThreaded' | Set-Content $_.FullName }
           
           msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=x64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;stubdata" /m
+          if ($LASTEXITCODE -ne 0) { throw "ICU x64 build failed" }
           msbuild allinone\allinone.sln /p:Configuration=Release /p:Platform=ARM64 /p:SkipUWP=true /p:WindowsTargetPlatformVersion=10.0.26100.0 "/t:common;stubdata" /m
+          if ($LASTEXITCODE -ne 0) { throw "ICU ARM64 build failed" }
     
           Pop-Location
           New-Item -ItemType Directory -Path libx64
@@ -124,16 +258,19 @@ jobs:
           path: ./libARM64
 
   build_libicu_osx:
+    needs: [provenance_contracts, release_authorization]
     strategy:
       matrix:
         arch: [ 'x86_64','arm64' ]
     runs-on: ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Build ICU
         run: |
-          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          python eng/provenance.py fetch-source --archive icu.zip
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
@@ -195,9 +332,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Merge artifacts
         uses: actions/upload-artifact/merge@v4
@@ -265,46 +403,103 @@ jobs:
           setAllVars: true
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v1.7.2
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 8.0.100
 
       - name: Build nuget
         run: |
-          pushd nuget
-          .\nuget.exe pack uno.icu-wasm/uno.icu-wasm.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          .\nuget.exe pack uno.icu-macos/uno.icu-macos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          .\nuget.exe pack uno.icu-ios/uno.icu-ios.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          .\nuget.exe pack uno.icu-tvos/uno.icu-tvos.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          .\nuget.exe pack uno.icu-win/uno.icu-win.nuspec -version ${{ steps.nbgv.outputs.SemVer2 }}
-          popd
+          ./eng/Pack.ps1 -Version '${{ steps.nbgv.outputs.SemVer2 }}' -SourceArchive icu.zip -OutputDirectory artifacts/packages
+          New-Item -ItemType Directory artifacts/ReleaseEvidence | Out-Null
+          Copy-Item artifacts/packages/unsigned-packages.json artifacts/ReleaseEvidence/unsigned-packages.json
+          Copy-Item icu.zip artifacts/ReleaseEvidence/icu-source.zip
+
+      - name: Verify NuGet notice packing contract with the pinned tool
+        run: |
+          python tests/notice_pack.py --archive icu.zip --nuget artifacts/tools/nuget-6.14.0.exe --work-directory artifacts/notice-contract
+          if ($LASTEXITCODE -ne 0) { throw "NuGet notice contract failed" }
+
+      - name: Exercise packaged Windows x64 ICU and filtered data
+        shell: pwsh
+        run: |
+          $package = Get-Item "artifacts/packages/Uno.icu-win.${{ steps.nbgv.outputs.SemVer2 }}.nupkg"
+          $hash = (Get-FileHash $package.FullName -Algorithm SHA256).Hash
+          python tests/icu_smoke.py --package $package.FullName --work-directory artifacts/win-smoke --expected-sha256 $hash --output artifacts/ReleaseEvidence/windows-smoke.json
+          if ($LASTEXITCODE -ne 0) { throw "Windows ICU/data smoke failed" }
 
       - name: Add NuGet Summary
         shell: pwsh
         run: |
-          echo '### NuGet Package Summary' >> $env:GITHUB_STEP_SUMMARY
-          echo 'Package version: `${{ steps.nbgv.outputs.SemVer2 }}`' >> $env:GITHUB_STEP_SUMMARY
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### NuGet Package Summary'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Package version: `${{ steps.nbgv.outputs.SemVer2 }}`'
 
       - uses: actions/upload-artifact@v4
         with:
           name: nuget
-          path: ./nuget/*.nupkg
+          path: ./artifacts/packages/*.nupkg
+          if-no-files-found: error
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-evidence
+          path: artifacts/ReleaseEvidence
+          if-no-files-found: error
+          retention-days: 90
+
+  macos_smoke:
+    needs: package
+    strategy:
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: packages
+      - name: Exercise packaged macOS ICU and filtered data
+        shell: bash
+        run: |
+          PACKAGE=(packages/Uno.icu-macos.*.nupkg)
+          HASH=$(shasum -a 256 "${PACKAGE[0]}")
+          python3 tests/icu_smoke.py --package "${PACKAGE[0]}" --work-directory artifacts/mac-smoke --expected-sha256 "${HASH%% *}" --output artifacts/macos-smoke.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-smoke-${{ matrix.runner }}
+          path: artifacts/macos-smoke.json
+          if-no-files-found: error
+          retention-days: 90
 
   sign:
     name: Sign Package
-    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
+          toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          ((inputs.operation == 'release-dev' && github.ref == 'refs/heads/main') ||
+           (inputs.operation == 'release-prod' && startsWith(github.ref, 'refs/heads/release/'))) }}
     runs-on: windows-latest
     environment: PackageSign
 
     permissions:
       id-token: write # Required for requesting the JWT
+      contents: read
+      attestations: write
 
     needs:
       - package
+      - macos_smoke
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -312,8 +507,18 @@ jobs:
           name: nuget
           path: artifacts\NuGet
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-evidence
+          path: artifacts/ReleaseEvidence
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-smoke-*
+          path: artifacts/ReleaseEvidence/macos-smoke
+
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '9.0.x'
 
@@ -323,7 +528,7 @@ jobs:
       
       # Login to Azure using a ServicePrincipal configured to authenticate agaist a GitHub Action
       - name: 'Az CLI login'
-        uses: azure/login@v1
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           allow-no-subscriptions: true
           client-id: ${{ secrets.SIGN_AZURE_CLIENT_ID }}
@@ -348,15 +553,58 @@ jobs:
           --azure-key-vault-certificate "${{ secrets.SIGN_KEY_VAULT_CERTIFICATE_ID }}"
           --verbosity information
 
+      - name: Verify signed packages and preserve unsigned payload identity
+        # Signing changes the archive. Inventory and attest only after signature validation.
+        run: |
+          foreach ($package in Get-ChildItem artifacts/NuGet/*.nupkg) {
+            dotnet nuget verify $package.FullName --all
+            if ($LASTEXITCODE -ne 0) { throw "NuGet signature verification failed" }
+          }
+          $unsigned = Get-Content artifacts/ReleaseEvidence/unsigned-packages.json -Raw | ConvertFrom-Json
+          python eng/provenance.py inventory --directory artifacts/NuGet --version $unsigned.packageVersion --commit $env:GITHUB_SHA --phase signed --baseline artifacts/ReleaseEvidence/unsigned-packages.json --output artifacts/ReleaseEvidence/signed-packages.json
+          if ($LASTEXITCODE -ne 0) { throw "Signed package validation failed" }
+
+      - name: Attest final signed package bytes
+        id: attest_packages
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: artifacts/NuGet/*.nupkg
+
+      - name: Retain attestation bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          Copy-Item '${{ steps.attest_packages.outputs.bundle-path }}' artifacts/ReleaseEvidence/signed-packages.sigstore.jsonl
+          foreach ($package in Get-ChildItem artifacts/NuGet/*.nupkg) {
+            $result = gh attestation verify $package.FullName --bundle artifacts/ReleaseEvidence/signed-packages.sigstore.jsonl --repo $env:GITHUB_REPOSITORY --signer-workflow "$env:GITHUB_REPOSITORY/.github/workflows/main.yml" --source-digest $env:GITHUB_SHA --signer-digest $env:GITHUB_SHA --format json
+            if ($LASTEXITCODE -ne 0) { throw "Final package attestation verification failed" }
+            $result | Set-Content "artifacts/ReleaseEvidence/$($package.Name).verification.json"
+          }
+
       - name: Upload Signed Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: NuGet-Signed
           path: .\artifacts\NuGet
+          if-no-files-found: error
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: artifacts/ReleaseEvidence
+          if-no-files-found: error
+          retention-days: 90
 
   publish_dev:
     name: Publish Dev
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
+          toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          inputs.operation == 'release-dev' && github.ref == 'refs/heads/main' }}
     runs-on: windows-latest
 
     needs:
@@ -372,11 +620,16 @@ jobs:
       - name: NuGet Push
         shell: pwsh
         run: |
-          dotnet nuget push artifacts\*.nupkg -s https://api.nuget.org/v3/index.json -k "${{ secrets.NUGET_ORG_API_KEY }}" --skip-duplicate
+          dotnet nuget push artifacts\*.nupkg -s https://api.nuget.org/v3/index.json -k "${{ secrets.NUGET_ORG_API_KEY }}"
 
   publish_prod:
     name: Publish Production
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'unoplatform/uno.icu' &&
+          toJSON(inputs.authorize_apple) == 'false' &&
+          toJSON(inputs.authorize_release) == 'true' && toJSON(inputs.authorize_native) == 'false' &&
+          inputs.expected_sha == github.sha && github.workflow_sha == github.sha &&
+          inputs.operation == 'release-prod' && startsWith(github.ref, 'refs/heads/release/') }}
     runs-on: windows-latest
     environment: Production
     needs:
@@ -387,9 +640,10 @@ jobs:
   
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
   
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -400,10 +654,36 @@ jobs:
       - name: NuGet Push
         shell: pwsh
         run: |
-          dotnet nuget push artifacts\*.nupkg -s https://api.nuget.org/v3/index.json -k "${{ secrets.NUGET_ORG_API_KEY }}" --skip-duplicate
+          dotnet nuget push artifacts\*.nupkg -s https://api.nuget.org/v3/index.json -k "${{ secrets.NUGET_ORG_API_KEY }}"
 
       - name: Tag Release
         uses: ./.github/workflows/actions/tag-release
+
+      # The existing tag composite performs a checkout, which cleans untracked
+      # artifacts. Download exact signed packages again; never reconstruct them.
+      - uses: actions/download-artifact@v4
+        with:
+          name: NuGet-Signed
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-evidence
+          path: release-evidence
+
+      - name: Retain release evidence beyond Actions expiry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $inventory = Get-Content release-evidence/signed-packages.json -Raw | ConvertFrom-Json
+          # No --clobber, no old identity repair. Existing releases fail closed.
+          Compress-Archive -Path release-evidence/* -DestinationPath release-evidence.zip
+          $files = @(Get-ChildItem artifacts/*.nupkg | ForEach-Object FullName) + @("$PWD/release-evidence.zip")
+          $options = @()
+          if ($inventory.packageVersion.Contains('-')) { $options += '--prerelease' }
+          gh release create $inventory.packageVersion @files --verify-tag --title $inventory.packageVersion --notes "Source-pinned ICU 77.1; complete notices and final signed-package provenance are attached." @options
+          if ($LASTEXITCODE -ne 0) { throw "Durable release evidence publication failed" }
 
   build_libicu_iossim:
     strategy:
@@ -412,7 +692,9 @@ jobs:
     runs-on: 'macos-15' # arm64
     needs: build_libicu_osx
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -423,7 +705,7 @@ jobs:
       - name: Build ICU
         run: |
           # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
-          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          python eng/provenance.py fetch-source --archive icu.zip
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
@@ -446,7 +728,9 @@ jobs:
     runs-on: 'macos-15' # arm64
     needs: build_libicu_osx
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -457,7 +741,7 @@ jobs:
       - name: Build ICU
         run: |
           # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
-          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          python eng/provenance.py fetch-source --archive icu.zip
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
@@ -511,7 +795,9 @@ jobs:
     runs-on: 'macos-15' # arm64
     needs: build_libicu_osx
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -522,7 +808,7 @@ jobs:
       - name: Build ICU
         run: |
           # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
-          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          python eng/provenance.py fetch-source --archive icu.zip
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"
@@ -545,7 +831,9 @@ jobs:
     runs-on: 'macos-15' # arm64
     needs: build_libicu_osx
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -556,7 +844,7 @@ jobs:
       - name: Build ICU
         run: |
           # Thanks to https://github.com/apotocki/icu4c-iosx for the configure options
-          curl -L -o icu.zip ${ICU_SOURCE_ZIP_URL}
+          python eng/provenance.py fetch-source --archive icu.zip
           mkdir icu
           unzip -d icu icu.zip
           export ICU_DATA_FILTER_FILE="$PWD/src/cldr_data/filters.json"

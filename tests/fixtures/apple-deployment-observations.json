@@ -1,0 +1,38 @@
+{
+  "producerRun": 34851642559,
+  "producerAttempt": 1,
+  "producerCommit": "16214039a82a7b457e2f928334b060a1e010cae3",
+  "artifactId": 10351248676,
+  "artifactZipSha256": "27e658b15b210dbf7b7adb88e60872f7d3a8431165a8607eb4b3964e71d928f5",
+  "qualification": "Independently decoded retained iOS device controls, metadata only. The rejected iossim-arm64 archive was not retained; its member and actual version fields are unknown.",
+  "controls": [
+    {
+      "archive": "libicuuc.a",
+      "archiveSha256": "20b00d63dff58ff450516d2b8ce8afbea80bb5dc1c788493f1c1b6d15e5ea024",
+      "memberCount": 201,
+      "member": "appendable.ao",
+      "objectSha256": "75c8eeb592f6f57a461f14b871b96737bc67e58c70abdbb44b9efea14e690338",
+      "cpu": 16777228,
+      "cpuSubtype": 0,
+      "fileType": 1,
+      "platform": 2,
+      "minimum": 852992,
+      "sdk": 1180928,
+      "buildVersionHex": "32000000180000000200000000040d000005120000000000"
+    },
+    {
+      "archive": "libicudata.a",
+      "archiveSha256": "a37cf09bfe49ca675489dfc2f5dafaaa2ba6e711e883b666fa522c2cdf313e56",
+      "memberCount": 1,
+      "member": "icudt77l_dat.o",
+      "objectSha256": "9a16d5e136cb5654e95454c6fe17b07a4612655b560c05cf891d21fda8fc5fdd",
+      "cpu": 16777228,
+      "cpuSubtype": 0,
+      "fileType": 1,
+      "platform": 2,
+      "minimum": 852992,
+      "sdk": 0,
+      "buildVersionHex": "32000000180000000200000000040d000000000000000000"
+    }
+  ]
+}
