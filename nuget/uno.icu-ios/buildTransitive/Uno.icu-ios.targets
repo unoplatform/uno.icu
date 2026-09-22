@@ -3,29 +3,29 @@
 
     <ItemGroup Condition="'$(IsUnoHead)' == 'True'">
         <!-- iOS device -->
-        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator')) and !$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)ios/libicuuc.a">
+        <NativeReference Condition="$(RuntimeIdentifier.StartsWith('ios-'))" Include="$(MSBuildThisFileDirectory)ios/libicuuc.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
-        <NativeReference Condition="!$(RuntimeIdentifier.Contains('iossimulator')) and !$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a">
+        <NativeReference Condition="$(RuntimeIdentifier.StartsWith('ios-'))" Include="$(MSBuildThisFileDirectory)ios/libicudata.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
         <!-- iOS simulator -->
-        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicuuc.a">
+        <NativeReference Condition="$(RuntimeIdentifier.StartsWith('iossimulator-'))" Include="$(MSBuildThisFileDirectory)iossim/libicuuc.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
-        <NativeReference Condition="$(RuntimeIdentifier.Contains('iossimulator'))" Include="$(MSBuildThisFileDirectory)iossim/libicudata.a">
+        <NativeReference Condition="$(RuntimeIdentifier.StartsWith('iossimulator-'))" Include="$(MSBuildThisFileDirectory)iossim/libicudata.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
         <!-- Mac Catalyst (macabi) -->
-        <NativeReference Condition="$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)maccatalyst/libicuuc.a">
+        <NativeReference Condition="$(RuntimeIdentifier.StartsWith('maccatalyst-'))" Include="$(MSBuildThisFileDirectory)maccatalyst/libicuuc.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
-        <NativeReference Condition="$(RuntimeIdentifier.Contains('maccatalyst'))" Include="$(MSBuildThisFileDirectory)maccatalyst/libicudata.a">
+        <NativeReference Condition="$(RuntimeIdentifier.StartsWith('maccatalyst-'))" Include="$(MSBuildThisFileDirectory)maccatalyst/libicudata.a">
             <Kind>Static</Kind>
             <ForceLoad>True</ForceLoad>
         </NativeReference>
