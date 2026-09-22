@@ -19,5 +19,7 @@
         <file src="ios\libicudata.a" target="buildTransitive\ios" />
         <file src="iossim\libicuuc.a" target="buildTransitive\iossim" />
         <file src="iossim\libicudata.a" target="buildTransitive\iossim" />
+        <file src="maccatalyst\libicuuc.a" target="buildTransitive\maccatalyst" />
+        <file src="maccatalyst\libicudata.a" target="buildTransitive\maccatalyst" />
     </files>
 </package>
