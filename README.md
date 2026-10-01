@@ -11,7 +11,7 @@ ICU ([International Components for Unicode](https://icu.unicode.org/)) builds us
 
 ## ICU data
 
-The data is filtered (`src/cldr_data/filters.json`) to what text layout uses: the break iterator rules and dictionaries, the emoji and layout properties. The WebAssembly, macOS and Windows packages embed it in the app head.
+The data is filtered (`src/cldr_data/filters.json`), then the locale tree and converter aliases the ICU build tools need are removed, leaving what text layout uses: the break iterator rules and dictionaries, the emoji and layout properties. The WebAssembly, macOS and Windows packages embed it in the app head.
 
 | File | Contents |
 |---|---|
