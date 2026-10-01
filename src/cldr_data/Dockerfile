@@ -26,16 +26,16 @@ ENV LD_LIBRARY_PATH=/icu/icu-release-77-1/icu4c/source/lib
 RUN ../../../bin/icupkg -l icudt77l.dat > items.txt \
     && grep -E '^[^/]+\.res$|^cnvalias\.icu$' items.txt > unused.txt \
     && test -s unused.txt \
-    && ../../../bin/icupkg -r unused.txt icudt77l.dat icudt77l-full.dat
+    && ../../../bin/icupkg -c -r unused.txt icudt77l.dat icudt77l-full.dat
 
 # Split the break iterator dictionaries (Chinese/Japanese, Thai, Lao, Khmer, Burmese words: most of the data)
 # from the rest, so they can be left out or loaded only when text in those scripts shows up.
 RUN grep '\.dict$' items.txt > dictionaries.txt \
     && test -s dictionaries.txt \
-    && ../../../bin/icupkg -r dictionaries.txt icudt77l-full.dat icudt77l-core.dat \
+    && ../../../bin/icupkg -c -r dictionaries.txt icudt77l-full.dat icudt77l-core.dat \
     && mkdir dictionaries \
     && ../../../bin/icupkg -x dictionaries.txt -d dictionaries icudt77l.dat \
-    && ../../../bin/icupkg -tl -a dictionaries.txt -s dictionaries new icudt77l-dictionaries.dat \
+    && ../../../bin/icupkg -c -tl -a dictionaries.txt -s dictionaries new icudt77l-dictionaries.dat \
     && ../../../bin/icupkg -l icudt77l-core.dat | grep -q 'brkitr/line\.brk' \
     && test "$(../../../bin/icupkg -l icudt77l-dictionaries.dat | wc -l)" -eq "$(wc -l < dictionaries.txt)" \
     && ls -l icudt77l*.dat
