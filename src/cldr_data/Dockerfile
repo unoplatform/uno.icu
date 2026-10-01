@@ -1,4 +1,4 @@
-# Build this Dockerfile with  "docker build --build-arg ICU_SOURCE_ZIP_URL=<icu-zip-url> --output type=local,dest=. ." to get the .dat file in the currect directory
+# Build this Dockerfile with  "docker build --build-arg ICU_SOURCE_ZIP_URL=<icu-zip-url> --output type=local,dest=. ." to get the .dat files in the current directory
 ARG ICU_SOURCE_ZIP_URL
 
 FROM docker.io/ubuntu:24.04 AS build
@@ -18,6 +18,21 @@ WORKDIR icu-release-77-1/icu4c/source
 RUN ./runConfigureICU Linux
 RUN make -j $(nproc)
 
+# Split the break iterator dictionaries (Chinese/Japanese, Thai, Lao, Khmer, Burmese words: most of the data)
+# from the rest, so they can be left out or loaded only when text in those scripts shows up.
+WORKDIR data/out/tmp
+ENV LD_LIBRARY_PATH=/icu/icu-release-77-1/icu4c/source/lib
+RUN ../../../bin/icupkg -l icudt77l.dat | grep '\.dict$' > dictionaries.txt \
+    && test -s dictionaries.txt \
+    && ../../../bin/icupkg -r dictionaries.txt icudt77l.dat icudt77l-core.dat \
+    && mkdir dictionaries \
+    && ../../../bin/icupkg -x dictionaries.txt -d dictionaries icudt77l.dat \
+    && ../../../bin/icupkg -tl -a dictionaries.txt -s dictionaries new icudt77l-dictionaries.dat \
+    && ../../../bin/icupkg -l icudt77l-core.dat | grep -q 'brkitr/line\.brk' \
+    && test "$(../../../bin/icupkg -l icudt77l-dictionaries.dat | wc -l)" -eq "$(wc -l < dictionaries.txt)"
+
 
 FROM scratch
 COPY --from=build /icu/icu-release-77-1/icu4c/source/data/out/tmp/icudt77l.dat /icudt.dat
+COPY --from=build /icu/icu-release-77-1/icu4c/source/data/out/tmp/icudt77l-core.dat /icudt.core.dat
+COPY --from=build /icu/icu-release-77-1/icu4c/source/data/out/tmp/icudt77l-dictionaries.dat /icudt.dictionaries.dat
