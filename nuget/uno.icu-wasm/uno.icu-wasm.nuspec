@@ -17,6 +17,8 @@
         <file src="buildTransitive\Uno.icu-wasm.targets" target="buildTransitive" />
         <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
         <file src="..\icudt.dat" target="buildTransitive" />
+        <file src="..\icudt.core.dat" target="buildTransitive" />
+        <file src="..\icudt.dictionaries.dat" target="buildTransitive" />
         <file src="buildTransitive\native\**" target="buildTransitive\native" />
     </files>
 </package>
