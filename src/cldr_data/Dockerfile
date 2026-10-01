@@ -23,7 +23,7 @@ ENV LD_LIBRARY_PATH=/icu/icu-release-77-1/icu4c/source/lib
 
 # Data the filter keeps for the build tools (genbrk can't initialize ICU without the converter aliases) but
 # that text layout never reads: the main locale tree (break iterators use the brkitr tree) and the converter aliases.
-RUN ../../../bin/icupkg -l icudt77l.dat > items.txt \
+RUN ../../../bin/icupkg --ignore-deps -l icudt77l.dat > items.txt \
     && grep -E '^[^/]+\.res$|^cnvalias\.icu$' items.txt > unused.txt \
     && test -s unused.txt \
     && ../../../bin/icupkg --ignore-deps -r unused.txt icudt77l.dat icudt77l-full.dat
@@ -34,10 +34,10 @@ RUN grep '\.dict$' items.txt > dictionaries.txt \
     && test -s dictionaries.txt \
     && ../../../bin/icupkg --ignore-deps -r dictionaries.txt icudt77l-full.dat icudt77l-core.dat \
     && mkdir dictionaries \
-    && ../../../bin/icupkg -x dictionaries.txt -d dictionaries icudt77l.dat \
+    && ../../../bin/icupkg --ignore-deps -x dictionaries.txt -d dictionaries icudt77l.dat \
     && ../../../bin/icupkg --ignore-deps -tl -a dictionaries.txt -s dictionaries new icudt77l-dictionaries.dat \
-    && ../../../bin/icupkg -l icudt77l-core.dat | grep -q 'brkitr/line\.brk' \
-    && test "$(../../../bin/icupkg -l icudt77l-dictionaries.dat | wc -l)" -eq "$(wc -l < dictionaries.txt)" \
+    && ../../../bin/icupkg --ignore-deps -l icudt77l-core.dat | grep -q 'brkitr/line\.brk' \
+    && test "$(../../../bin/icupkg --ignore-deps -l icudt77l-dictionaries.dat | wc -l)" -eq "$(wc -l < dictionaries.txt)" \
     && ls -l icudt77l*.dat
 
 
