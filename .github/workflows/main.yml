@@ -75,13 +75,18 @@ jobs:
         run: |
           pushd src/cldr_data
           docker build --build-arg ICU_SOURCE_ZIP_URL=${ICU_SOURCE_ZIP_URL} --output type=local,dest=. .
+          {
+            echo "| ICU data | Bytes |"
+            echo "|---|---|"
+            for f in icudt*.dat; do echo "| $f | $(stat -c %s "$f") |"; done
+          } >> $GITHUB_STEP_SUMMARY
           popd
 
       - name: Upload icudt.dat
         uses: actions/upload-artifact@v4
         with:
           name: icudt.dat
-          path: ./src/cldr_data/icudt.dat
+          path: ./src/cldr_data/icudt*.dat
 
   build_libicu_windows:
     runs-on: 'windows-2025'
@@ -258,7 +263,7 @@ jobs:
           mkdir -p nuget/uno.icu-win/libicu/arm64
           mv merged-artifacts/libicu-windows-arm64/* ./nuget/uno.icu-win/libicu/arm64
 
-          mv ./merged-artifacts/icudt.dat/icudt.dat ./nuget/
+          mv ./merged-artifacts/icudt.dat/icudt*.dat ./nuget/
 
           mkdir -p ./nuget/uno.icu-wasm/buildTransitive/native/unoicu.a
           pushd merged-artifacts

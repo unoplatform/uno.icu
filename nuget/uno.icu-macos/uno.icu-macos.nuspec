@@ -17,6 +17,8 @@
         <file src="buildTransitive\Uno.icu-macos.targets" target="buildTransitive" />
         <file src="..\Uno.icu.Common.targets" target="buildTransitive" />
         <file src="..\icudt.dat" target="buildTransitive" />
+        <file src="..\icudt.core.dat" target="buildTransitive" />
+        <file src="..\icudt.dictionaries.dat" target="buildTransitive" />
         <file src="libicu/libicuuc.dylib" target="runtimes/osx/native" />
         <file src="libicu/libicudata.dylib" target="runtimes/osx/native" />
     </files>

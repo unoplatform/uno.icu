@@ -1,11 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-    <Target Name="AddUnoIcuEmbeddedResource" 
-            BeforeTargets="BeforeBuild;BeforeCompile" 
+    <!--
+        UnoIcuDictionaries:
+        - Embedded (default): the full ICU data, including the break iterator dictionaries.
+        - None: the data without dictionaries (~50 KB compressed instead of ~2 MB). Line breaking still follows the
+          Unicode rules for every script, but Thai, Lao, Khmer and Burmese text, which has no spaces between words,
+          then breaks at arbitrary characters instead of between words, and Chinese/Japanese word selection is
+          per character.
+    -->
+    <Target Name="AddUnoIcuEmbeddedResource"
+            BeforeTargets="BeforeBuild;BeforeCompile"
             Condition="'$(IsUnoHead)' == 'True' and '$(UnoIcuDataIncluded)' != 'true'">
+
+        <Error Condition="'$(UnoIcuDictionaries)' != '' and '$(UnoIcuDictionaries)' != 'Embedded' and '$(UnoIcuDictionaries)' != 'None'"
+               Text="Unsupported UnoIcuDictionaries value '$(UnoIcuDictionaries)'. Use 'Embedded' (default) or 'None'." />
+
         <ItemGroup>
-            <EmbeddedResource Include="$(MSBuildThisFileDirectory)icudt.dat" />
+            <EmbeddedResource Include="$(MSBuildThisFileDirectory)icudt.dat" Condition="'$(UnoIcuDictionaries)' != 'None'" />
+
+            <!-- Uno looks the data up by a resource name ending with icudt.dat -->
+            <EmbeddedResource Include="$(MSBuildThisFileDirectory)icudt.core.dat" LogicalName="icudt.dat" Condition="'$(UnoIcuDictionaries)' == 'None'" />
         </ItemGroup>
         <PropertyGroup>
             <UnoIcuDataIncluded>true</UnoIcuDataIncluded>
@@ -13,4 +28,3 @@
     </Target>
 
 </Project>
-
