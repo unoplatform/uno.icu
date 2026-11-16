@@ -15,8 +15,8 @@ import provenance as p
 
 class CurrentMain(unittest.TestCase):
     def test_current_version_is_not_replaced_by_historical_line(self):
-        p.validate_version("77.4.0-dev.1")
-        p.validate_version("77.4.1")
+        p.validate_version("77.5.0-dev.1")
+        p.validate_version("77.5.1")
         with self.assertRaises(ValueError):
             p.validate_version("77.2.2-provenance.1")
 
@@ -31,7 +31,7 @@ class CurrentMain(unittest.TestCase):
         self.assertEqual(expected, {name for name in paths if name.endswith("/unoicu.a")})
 
     def test_current_nbgv_and_tag_sdk_preserved(self):
-        self.assertEqual("77.4-dev.{height}", json.loads((p.ROOT / "version.json").read_text())["version"])
+        self.assertEqual("77.5-dev.{height}", json.loads((p.ROOT / "version.json").read_text())["version"])
         tag = yaml.load((p.ROOT / ".github/workflows/actions/tag-release/action.yml").read_text(), Loader=yaml.BaseLoader)
         sdk = next(step for step in tag["runs"]["steps"] if step.get("uses", "").startswith("actions/setup-dotnet@"))
         self.assertEqual("10.0.x", sdk["with"]["dotnet-version"])
@@ -75,7 +75,7 @@ class CurrentMain(unittest.TestCase):
 
     def test_filter_shim_and_version_bytes_preserved_after_eol_normalization(self):
         expected = {
-            "version.json": "c63c9dffa50915a718d414cbbaf4bd12b6c3e30fc0ba82c9eb8eae56d1055ddb",
+            "version.json": "8646a663a05975701b7d024df0b744a32c0ef6355cc48ee598df40478e91d0dc",
             "src/cldr_data/filters.json": "02f535854acf1cfa857808aa1fe2e7d07f807733b986cfa4611b7898f8472660",
             "src/unoicu/unoicu.c": "e5216fa4c689ba03a9b7888a29a841084fe29d7364dbd3dcbacac6f109753958",
         }

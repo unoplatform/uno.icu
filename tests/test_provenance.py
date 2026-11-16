@@ -32,7 +32,7 @@ class SourceContracts(unittest.TestCase):
         for version in ("77.2.1", "77.2.1-fixed", "77.2.2-provenance.1", "77.1.9", "77.3.0", "garbage"):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 p.validate_version(version)
-        p.validate_version("77.4.0-dev.1")
+        p.validate_version("77.5.0-dev.1")
 
     def test_source_lock_is_exact_commit_not_version_inference(self):
         lock = p.load_lock()
@@ -116,7 +116,7 @@ class ArchiveContracts(unittest.TestCase):
         (self.root / "eng/source-lock.json").write_bytes(p.json_bytes(self.lock))
         (self.root / "LICENSE.md").write_bytes(self.uno)
         (self.root / "eng/NOTICE.md").write_bytes(self.notice)
-        self.version = "77.4.0-dev.1"
+        self.version = "77.5.0-dev.1"
         self.commit = "a" * 40
         self.source = {"schemaVersion": 1, "packageVersion": self.version,
                        "unoRepository": {"url": p.REPOSITORY, "commit": self.commit},

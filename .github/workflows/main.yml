@@ -44,7 +44,6 @@ permissions:
   contents: read
 
 env:
-  ICU_SOURCE_ZIP_URL: https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip
   # Deployment target stamped into the Uno.icu-macos dylibs. Without an explicit value clang
   # inherits the runner's OS version (macos-15 -> minos 15.0). 10.15 matches libUnoNativeMac in
   # Uno.WinUI.Runtime.Skia.MacOS; the arm64 slice is clamped to 11.0 by the toolchain.
