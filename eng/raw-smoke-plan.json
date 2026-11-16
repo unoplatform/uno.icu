@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "producer": {
+    "repository": "unoplatform/uno.icu",
+    "repositoryId": 1067926062,
+    "commit": "8fd7b5345570bb4b7230e13aa596def2df8fc7ad",
+    "runId": 34811569292,
+    "runAttempt": 1,
+    "branch": "dev/morning4coffe-dev/icu-build-only-main-20260913",
+    "workflowPath": ".github/workflows/main.yml",
+    "event": "workflow_dispatch"
+  },
+  "artifacts": {
+    "source": {
+      "id": 10334519033,
+      "name": "build-only-source",
+      "zipBytes": 68633852,
+      "zipSha256": "ce1d8fca41971b8e55543058b9cf7734a978d907205cf24da45cf8e8a6780e4c",
+      "manifestSha256": "83d03da7568ae0ef3e3390c71e4fbbcc98e25c20f0bbb597ec05248806e95569"
+    },
+    "data": {
+      "id": 10334953010,
+      "name": "build-only-data",
+      "zipBytes": 3134084,
+      "zipSha256": "04a581fcbfd548608ace9c1ee34e87f7eb224155c08b0780dce6afb360240160",
+      "manifestSha256": "f01ae5f24df6f056ff15966049e8f2f82b30089c58554ceb2976cd8bb3392e98"
+    },
+    "windows-x64": {
+      "id": 10334773419,
+      "name": "build-only-windows-x64",
+      "zipBytes": 1873710,
+      "zipSha256": "a1b4b9b2b050225057a532222b0f94a6b5241acbcdc77907420e9bad8d62be13",
+      "manifestSha256": "23e48944d68627135604f145b584d739128f5cb53b80f6e3584e90a8f70acb21"
+    },
+    "macos-x86_64": {
+      "id": 10335510001,
+      "name": "build-only-macos-x86_64",
+      "zipBytes": 939240,
+      "zipSha256": "06e01999d4a541d9f744e17ef67e5d805314ecfec8c200558357b1691d4fcd9d",
+      "manifestSha256": "fc04ff86a2f103c2575a67baf6001b2b2a7e8739c4f6daefba4fb8de4756b989"
+    },
+    "macos-arm64": {
+      "id": 10334099801,
+      "name": "build-only-macos-arm64",
+      "zipBytes": 913225,
+      "zipSha256": "f77968424d1c810c26d2b15d23da706d7a333029f33254cf3d4410bee60cb80c",
+      "manifestSha256": "7e42a56d60b4e328f409ba15c1270d01a6f18b4f5a1bac4e9d9b1da7218cde90"
+    }
+  },
+  "jobs": {
+    "provenance_contracts": {"id": 103873807411, "conclusion": "success"},
+    "build_only / authorize": {"id": 103873852607, "conclusion": "success"},
+    "release_authorization": {"id": 103873853000, "conclusion": "skipped"},
+    "build_unoicu": {"id": 103873853319, "conclusion": "skipped"},
+    "build_libicu_windows": {"id": 103873853441, "conclusion": "skipped"},
+    "build_libicu_osx": {"id": 103873853520, "conclusion": "skipped"},
+    "build_icudt": {"id": 103873853570, "conclusion": "skipped"},
+    "build_libicu_tvossim": {"id": 103873853917, "conclusion": "skipped"},
+    "build_libicu_osx_universal": {"id": 103873853923, "conclusion": "skipped"},
+    "build_libicu_tvos": {"id": 103873853950, "conclusion": "skipped"},
+    "build_libicu_ios": {"id": 103873853986, "conclusion": "skipped"},
+    "build_libicu_iossim": {"id": 103873853998, "conclusion": "skipped"},
+    "build_libicu_tvossim_universal": {"id": 103873854104, "conclusion": "skipped"},
+    "build_libicu_iossim_universal": {"id": 103873854389, "conclusion": "skipped"},
+    "package": {"id": 103873854615, "conclusion": "skipped"},
+    "Sign Package": {"id": 103873855165, "conclusion": "skipped"},
+    "macos_smoke": {"id": 103873855229, "conclusion": "skipped"},
+    "Publish Dev": {"id": 103873855743, "conclusion": "skipped"},
+    "Publish Production": {"id": 103873855778, "conclusion": "skipped"},
+    "build_only / macos (x86_64, macos-15-intel)": {"id": 103873920295, "conclusion": "success"},
+    "build_only / windows (arm64)": {"id": 103873920299, "conclusion": "success"},
+    "build_only / data": {"id": 103873920310, "conclusion": "success"},
+    "build_only / windows (x64)": {"id": 103873920333, "conclusion": "success"},
+    "build_only / macos (arm64, macos-15)": {"id": 103873920372, "conclusion": "success"},
+    "build_only / wasm (3.1.56, st,simd)": {"id": 103873920386, "conclusion": "success"},
+    "build_only / wasm (3.1.56, mt,simd)": {"id": 103873920394, "conclusion": "success"},
+    "build_only / wasm (5.0.6, st)": {"id": 103873920399, "conclusion": "success"},
+    "build_only / wasm (3.1.56, st)": {"id": 103873920432, "conclusion": "success"},
+    "build_only / wasm (5.0.6, st,simd)": {"id": 103873920435, "conclusion": "success"},
+    "build_only / wasm (5.0.6, mt,simd)": {"id": 103873920465, "conclusion": "success"},
+    "build_only / wasm (5.0.6, mt)": {"id": 103873920467, "conclusion": "success"},
+    "build_only / wasm (3.1.56, mt)": {"id": 103873920526, "conclusion": "success"},
+    "build_only / macos_universal": {"id": 103875473846, "conclusion": "success"},
+    "build_only / staging": {"id": 103877060168, "conclusion": "success"}
+  }
+}

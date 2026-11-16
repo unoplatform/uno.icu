@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "nuget": {
+    "version": "6.14.0",
+    "url": "https://dist.nuget.org/win-x86-commandline/v6.14.0/nuget.exe",
+    "sha256": "92dbed160ddee0f64b901e907439e021211b428e57c089ecc12fc38dcc4bd9a5"
+  }
+}

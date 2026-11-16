@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "resolvedDateUtc": "2026-09-13",
+  "platform": "linux/amd64",
+  "data": {
+    "tag": "docker.io/library/ubuntu:24.04",
+    "indexDigest": "sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254",
+    "image": "docker.io/library/ubuntu@sha256:a61567bd31828687156d735ea8eb01ba4e37636e225dd6a48ba94136a70d9d61"
+  },
+  "wasm": {
+    "3.1.56": {
+      "tag": "docker.io/emscripten/emsdk:3.1.56",
+      "image": "docker.io/emscripten/emsdk@sha256:f9479effb0d095fea1c8501b57c18d13876a5e3bfebcb71f0da68a0fe49c935f"
+    },
+    "5.0.6": {
+      "tag": "docker.io/emscripten/emsdk:5.0.6",
+      "indexDigest": "sha256:e1b3e665245524ac6b62b180f9ccf9bd22308e6bb034f5fd9090df54fdbdfba6",
+      "image": "docker.io/emscripten/emsdk@sha256:9d274f6772533031d1fab4fc9ed156b778f5311ab6ab58d149d0085ad0ff0f23"
+    }
+  },
+  "qualification": "Registry manifest bytes verified against Docker-Content-Digest; no layers pulled locally. Apt packages and hosted runners still float. No byte-reproducibility claim."
+}

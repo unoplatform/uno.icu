@@ -1,0 +1,249 @@
+name: ICU build only
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorize_native:
+        description: Owner has approved this exact source and hosted capacity (no publication)
+        type: boolean
+        required: true
+        default: false
+      authorize_release:
+        description: Must remain false; mixed native/release authorization is rejected
+        type: boolean
+        required: true
+        default: false
+      full_five:
+        description: Expanded five-package native-input scope, not the default three-package build
+        type: boolean
+        default: false
+      authorize_apple:
+        description: Owner separately approved additional iOS/tvOS cross-build resources
+        type: boolean
+        default: false
+      expected_sha:
+        description: Full reviewed 40-character commit SHA of the selected workflow branch
+        type: string
+        required: true
+      target:
+        description: Approved resource group (all is required for complete three-package staging)
+        type: choice
+        required: true
+        default: all
+        options: [all, linux, windows, macos]
+  workflow_call:
+    inputs:
+      authorize_native:
+        type: boolean
+        required: true
+      authorize_release:
+        type: boolean
+        required: true
+      expected_sha:
+        type: string
+        required: true
+      target:
+        type: string
+        required: true
+      full_five:
+        type: boolean
+        default: false
+      authorize_apple:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: icu-build-only-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AUTHORIZE_NATIVE: ${{ toJSON(inputs.authorize_native) }}
+  AUTHORIZE_RELEASE: ${{ toJSON(inputs.authorize_release) }}
+  AUTHORIZE_APPLE: ${{ toJSON(inputs.authorize_apple) }}
+  FULL_FIVE: ${{ toJSON(inputs.full_five) }}
+  # A reusable workflow retains its caller's event-input schema. The standalone
+  # dispatcher has no operation field; read the actual event object dynamically.
+  DISPATCH_OPERATION: ${{ fromJSON(toJSON(github.event.inputs)).operation || '' }}
+  EXPECTED_SHA: ${{ inputs.expected_sha }}
+  BUILD_SCOPE: ${{ inputs.full_five && 'build-full-five' || 'build-only' }}
+  BUILD_TARGET: ${{ inputs.target }}
+  WORKFLOW_SHA: ${{ github.workflow_sha }}
+  PYTHONDONTWRITEBYTECODE: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+
+jobs:
+  authorize:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+          toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' &&
+          ((toJSON(inputs.full_five) == 'false' && toJSON(inputs.authorize_apple) == 'false') ||
+           (toJSON(inputs.full_five) == 'true' && toJSON(inputs.authorize_apple) == 'true' && inputs.target == 'all')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 eng/build_only.py authorize
+      - run: |
+          python3 -m venv artifacts/validation-env
+          artifacts/validation-env/bin/python -m pip install --no-cache-dir -r tests/requirements.txt
+          artifacts/validation-env/bin/python -m unittest discover -s tests -v
+      - run: python3 eng/build_only.py source
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-only-source
+          path: artifacts/build-only/source
+          if-no-files-found: error
+          retention-days: 90
+
+  data:
+    needs: [authorize]
+    if: ${{ inputs.target == 'all' || inputs.target == 'linux' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 eng/build_only.py build --kind data
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: build-only-data
+          path: artifacts/build-only/data
+          if-no-files-found: error
+          retention-days: 90
+
+  wasm:
+    needs: [authorize]
+    if: ${{ inputs.target == 'all' || inputs.target == 'linux' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        emscripten: ['3.1.56', '5.0.6']
+        variant: [st, mt, 'st,simd', 'mt,simd']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 eng/build_only.py build --kind wasm --emscripten "$EMSCRIPTEN" --variant "$VARIANT"
+        env:
+          EMSCRIPTEN: ${{ matrix.emscripten }}
+          VARIANT: ${{ matrix.variant }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: build-only-wasm-${{ matrix.emscripten }}-${{ matrix.variant }}
+          path: artifacts/build-only/wasm-${{ matrix.emscripten }}-${{ matrix.variant }}
+          if-no-files-found: error
+          retention-days: 90
+
+  windows:
+    needs: [authorize]
+    if: ${{ inputs.target == 'all' || inputs.target == 'windows' }}
+    # windows-2025 now selects VS2026 (18.x); pinned ICU uses the VS2022/v143 path.
+    runs-on: windows-2022
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python eng/build_only.py build --kind windows --variant $env:VARIANT
+        env:
+          VARIANT: ${{ matrix.arch }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: build-only-windows-${{ matrix.arch }}
+          path: artifacts/build-only/windows-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 90
+
+  macos:
+    needs: [authorize]
+    if: ${{ inputs.target == 'all' || inputs.target == 'macos' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ inputs.full_five && matrix.arch == 'arm64' && 180 || 90 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-15-intel
+          - arch: arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 eng/build_only.py build --kind macos --variant "$VARIANT"
+        env:
+          VARIANT: ${{ matrix.arch }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: build-only-macos-${{ matrix.arch }}
+          path: artifacts/build-only/macos-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() && inputs.full_five && matrix.arch == 'arm64' }}
+        with:
+          name: build-only-apple
+          path: artifacts/build-only/apple
+          if-no-files-found: error
+          retention-days: 90
+
+  macos_universal:
+    needs: [macos]
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: build-only-macos-*
+          path: artifacts/incoming
+      - run: python3 eng/build_only.py merge-macos --incoming artifacts/incoming
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: build-only-macos-universal
+          path: artifacts/build-only/macos-universal
+          if-no-files-found: error
+          retention-days: 90
+
+  staging:
+    needs: [data, wasm, windows, macos_universal]
+    if: ${{ inputs.target == 'all' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: build-only-*
+          path: artifacts/incoming
+      - run: python3 eng/build_only.py assemble --incoming artifacts/incoming
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.full_five && 'build-only-five-package-staging' || 'build-only-three-package-staging' }}
+          path: artifacts/build-only/${{ inputs.full_five && 'staging-five' || 'staging' }}
+          if-no-files-found: error
+          retention-days: 90

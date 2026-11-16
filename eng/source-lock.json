@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/unicode-org/icu",
+  "commit": "457157a92aa053e632cc7fcfd0e12f8a943b2d11",
+  "upstreamVersion": "77.1",
+  "corroboratingTag": "release-77-1",
+  "archiveUrl": "https://codeload.github.com/unicode-org/icu/zip/457157a92aa053e632cc7fcfd0e12f8a943b2d11",
+  "archiveSha256": "4d776b33e5016b259b96f86135264f425e5703543d9cfb0cf23f0d923665a742",
+  "licenseSha256": "451167c55c0fa447cc2d5632714f5e3c567fe4f1e1badefab2c1333852198aca"
+}

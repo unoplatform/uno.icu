@@ -1,0 +1,75 @@
+name: ICU raw smoke only
+
+on:
+  workflow_call:
+    inputs:
+      authorize_native:
+        type: boolean
+        required: true
+      authorize_release:
+        type: boolean
+        required: true
+      expected_sha:
+        type: string
+        required: true
+      target:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: icu-raw-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AUTHORIZE_NATIVE: ${{ toJSON(inputs.authorize_native) }}
+  AUTHORIZE_RELEASE: ${{ toJSON(inputs.authorize_release) }}
+  DISPATCH_OPERATION: ${{ fromJSON(toJSON(github.event.inputs)).operation || '' }}
+  EXPECTED_SHA: ${{ inputs.expected_sha }}
+  BUILD_SCOPE: raw-smoke
+  BUILD_TARGET: ${{ inputs.target }}
+  WORKFLOW_SHA: ${{ github.workflow_sha }}
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.authorize_native) == 'true' && toJSON(inputs.authorize_release) == 'false' && inputs.target == 'all' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - row: windows-x64
+            runner: windows-2022
+            python: python
+          - row: macos-x86_64
+            runner: macos-15-intel
+            python: python3
+          - row: macos-arm64
+            runner: macos-15
+            python: python3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate probe authorization and committed plan
+        run: ${{ matrix.python }} eng/hosted_raw_smoke.py authorize --row ${{ matrix.row }}
+      - name: Download approved producer artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ${{ matrix.python }} eng/hosted_raw_smoke.py download --row ${{ matrix.row }}
+      - name: Execute raw smoke without download credentials
+        run: ${{ matrix.python }} eng/hosted_raw_smoke.py run --row ${{ matrix.row }}
+      - name: Retain original bundles and independent probe evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: raw-smoke-${{ matrix.row }}-attempt-${{ github.run_attempt }}
+          path: artifacts/raw-smoke/${{ matrix.row }}
+          if-no-files-found: error
+          retention-days: 90
